@@ -23,6 +23,37 @@ from PySide6.QtCore import QObject, QProcess, Signal
 
 from scan_gui.models import OptionConstraint, OptionDescriptor, OptionType
 
+
+def find_option(options, name):
+    for option in options:
+        if option.name == name:
+            return option
+    return None
+
+
+def option_minimum(option: OptionDescriptor):
+    """The smallest value an option accepts, if known."""
+    constraint = option.constraint
+    if not constraint:
+        return None
+    if constraint[0] == OptionConstraint.RANGE:
+        value = float(constraint[1])
+        return str(int(value)) if value.is_integer() else str(value)
+    if constraint[0] == OptionConstraint.LIST:
+        numbers = [value for value in constraint[1] if _is_number(value)]
+        if numbers:
+            return min(numbers, key=float)
+    return None
+
+
+def _is_number(value: str) -> bool:
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
+
+
 ALL_OPTIONS_ARGS = ["-A"]
 
 # An option header is indented by exactly four spaces and starts with the

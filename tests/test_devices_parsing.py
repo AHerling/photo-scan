@@ -37,6 +37,17 @@ class ParseDevicesTest(unittest.TestCase):
         self.assertEqual(len(devices), 1)
         self.assertEqual(devices[0].name, "x")
 
+    def test_parses_airscan_eSCL_devices(self):
+        output = (Path(__file__).parent / "fixtures" / "scanimage_L_airscan.txt").read_text(
+            encoding="utf-8"
+        )
+        devices = parse_devices(output)
+        self.assertEqual(len(devices), 3)
+        self.assertEqual(devices[0].name, "escl:https://192.168.1.50:443/eSCL/Scanner")
+        self.assertIn("HP", devices[0].description)
+        self.assertEqual(devices[1].name, "airscan:w0:Brother MFC")
+        self.assertEqual(devices[2].name, "net:192.168.1.60:escl")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,14 +1,21 @@
 [project]
-name = "scan-gui"
+name = "photo-scan"
 version = "0.1.0"
-description = "Qt6 GUI for SANE scanners with automatic photo detection and cropping"
+description = "Photo Scan — Qt6 GUI for SANE scanners with automatic photo detection and cropping"
+readme = "README.md"
+license = {text = "MIT"}
 requires-python = ">=3.12"
-# Dependencies are system RPMs on Fedora, not pip packages:
-#   sudo dnf install python3-pyside6 python3-opencv sane-backends
+# Dependencies are system packages on Linux (SANE/Qt):
+#   Fedora: sudo dnf install python3-pyside6 python3-opencv sane-backends sane-airscan avahi
 dependencies = []
 
 [project.gui-scripts]
+photo-scan = "scan_gui.app:main"
 scan-gui = "scan_gui.app:main"
+
+[project.scripts]
+photo-scan-cli = "scan_gui.app:main"
+scan-gui-cli = "scan_gui.app:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -16,3 +23,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["scan_gui*"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]

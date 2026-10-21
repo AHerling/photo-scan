@@ -36,13 +36,31 @@ scanner's options…*, *Ready to scan.*, *Scanning…*).
 Scanner, Options, Scan and Results pages, every SANE option, presets, the
 scanner log and the lock file. Pick it in the Mode drop-down.
 
+## Network/WiFi scanners (eSCL/AirScan)
+
+`sane-airscan` is now recommended for network scanners that advertise themselves via mDNS/Avahi or eSCL. After installing it, `scanimage -L` should discover them automatically. If discovery is slow or a scanner is missing, check that `avahi-daemon` is running and enabled (`sudo systemctl enable --now avahi-daemon`), ensure the scanner and computer are on the same network, add your user to the `scanner,lp` groups, and check firewall settings. USB and `net`/`saned` scanners remain supported as before.
+
 ## Dependencies (Fedora)
 
 All via system packages — no venv or pip needed:
 
 ```bash
-sudo dnf install python3-pyside6 python3-opencv sane-backends
+sudo dnf install python3-pyside6 python3-opencv sane-backends sane-airscan avahi
 ```
+
+- `sane-backends` provides `scanimage` and core SANE drivers (USB scanners).
+- `sane-airscan` adds support for network/WiFi scanners using eSCL/AirScan (common on modern HP/Epson/Canon/Brother network printers/scanners). If you only use USB scanners, it is optional but recommended for broader compatibility.
+- `avahi` enables mDNS/zeroconf discovery for network scanners. Start it with `sudo systemctl enable --now avahi-daemon` if it's not already running.
+
+### Permissions (USB scanners)
+
+On Fedora, many USB scanners require membership in the `scanner` and `lp` groups:
+
+```bash
+sudo usermod -aG scanner,lp $USER
+```
+
+Log out and back in for the group changes to take effect. Without the correct permissions, `scanimage` may fail to access USB scanners.
 
 ## Run
 

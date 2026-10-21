@@ -12,8 +12,7 @@ CONFIG_PATH = APP_CONFIG_DIR / "config.json"
 
 DEFAULTS: dict = {
     "last_device": None,                       # device name from scanimage -L
-    "raw_dir": str(Path.home()),               # raw TIFFs land in the home dir
-    "photo_dir": str(Path.home()),             # cropped photos land there too
+    "raw_dir": str(Path.home()),               # scans (and photos) land in the home dir
     "presets": {},                             # M2: name -> {option: value}
 }
 

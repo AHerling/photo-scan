@@ -1,9 +1,10 @@
 """Application entry point: QApplication setup and main window creation."""
 
 import os
+import shutil
 import sys
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from scan_gui.ui.main_window import MainWindow
 
@@ -25,14 +26,37 @@ def _drop_shell_functions() -> None:
         del os.environ[name]
 
 
+def _check_scanimage() -> bool:
+    """Check that scanimage is available. Warn if not."""
+    if shutil.which("scanimage") is not None:
+        return True
+
+    QMessageBox.critical(
+        None,
+        "scanimage not found",
+        "The 'scanimage' tool was not found.\n\n"
+        "Install SANE on your system:\n\n"
+        "sudo dnf install sane-backends sane-airscan avahi\n\n"
+        "You may also need to add your user to the scanner and lp groups:\n\n"
+        "sudo usermod -aG scanner,lp $USER\n\n"
+        "Log out and back in for group changes to take effect.",
+    )
+    return False
+
+
 def main() -> int:
     _drop_shell_functions()
 
     app = QApplication(sys.argv)
-    app.setApplicationName("scan-gui")
-    app.setOrganizationName("scan-gui")
+    app.setApplicationName("Photo Scan")
+    app.setApplicationDisplayName("Photo Scan")
+    app.setOrganizationName("Photo Scan")
+    app.setDesktopFileName("org.photo.scan")
     app.setStyle("Fusion")
     app.setStyleSheet(_STYLE_SHEET)
+
+    if not _check_scanimage():
+        return 1
 
     window = MainWindow()
     window.show()

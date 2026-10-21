@@ -4,10 +4,11 @@ Pages never call each other directly — they emit signals and the window wires
 them to the backend and the app state machine.
 """
 
+import tempfile
 from pathlib import Path
 
 from PySide6.QtCore import QThreadPool, Qt, QTimer
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QImage
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -19,8 +20,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from scan_gui.backend.area import (
+    bed_size,
+    find_area_options,
+    full_bed_values,
+    selection_values,
+)
 from scan_gui.backend.devices import DeviceScanner
-from scan_gui.backend.options import OptionLoader
+from scan_gui.backend.options import OptionLoader, find_option, option_minimum
 from scan_gui.backend.scan import ScanJob, next_number, next_output_path
 from scan_gui.config import DEFAULTS, load_config, save_config
 from scan_gui.models import Device, OptionDescriptor
@@ -36,7 +43,7 @@ _NAV_ITEMS = ("Scanner", "Options", "Scan", "Results")
 
 # The two ways the app can look: the everyday view and the full one.
 _MODE_SIMPLE = 0
-_MODE_DEV = 1
+_MODE_PRO = 1
 
 # Which pages are reachable in each state.
 _NAV_BY_STATE = {
@@ -53,7 +60,7 @@ _NAV_BY_STATE = {
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Scan GUI")
+        self.setWindowTitle("Photo Scan")
         self.resize(960, 640)
 
         self._config = load_config()
@@ -67,11 +74,13 @@ class MainWindow(QMainWindow):
         self._devices: list[Device] = []
         self._options: list[OptionDescriptor] = []
         self._option_values: dict[str, str] = {}
+        self._previewing = False
+        self._preview_dir = Path(tempfile.mkdtemp(prefix="scan-gui-preview-"))
 
         # --- layout: header + one of the two modes ---
         self._mode_combo = QComboBox()
         self._mode_combo.addItem("Simple mode", _MODE_SIMPLE)
-        self._mode_combo.addItem("DEV-Mode", _MODE_DEV)
+        self._mode_combo.addItem("Pro Mode", _MODE_PRO)
         self._mode_combo.setToolTip("Simple mode is the everyday view")
         self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
@@ -158,6 +167,7 @@ class MainWindow(QMainWindow):
         self._scan_page.start_requested.connect(self._start_scan)
         self._scan_page.cancel_requested.connect(self._scan_job.cancel)
         self._scan_page.output_dir_requested.connect(self._on_output_dir_chosen)
+        self._scan_page.preview_requested.connect(self._start_preview)
         self._scan_job.started.connect(self._on_scan_started)
         self._scan_job.progress.connect(self._scan_page.set_progress)
         self._scan_job.progress.connect(self._simple_page.set_progress)
@@ -186,6 +196,10 @@ class MainWindow(QMainWindow):
         self._device_page.select_device_named(self._config.get("last_device"))
         if not devices:
             self.statusBar().showMessage("No scanners found.")
+            self._simple_page.set_status(
+                "No scanners found. Check USB/network, permissions (scanner,lp), "
+                "and avahi for AirScan. Press Refresh in the Scanner page."
+            )
 
     def _on_refresh_failed(self, message: str) -> None:
         self._device_page.set_busy(False)
@@ -197,6 +211,8 @@ class MainWindow(QMainWindow):
         self._device = device
         self._options_page.set_device(device)
         self._scan_page.set_device(device)
+        self._scan_page.clear_preview()
+        self._previewing = False
         self._simple_page.set_selected_device(device.name if device else None)
         self._options = []
         self._option_values = {}
@@ -274,9 +290,60 @@ class MainWindow(QMainWindow):
         values = self._options_page.current_values()
         # The simple mode has the last word on colour and resolution.
         values.update(self._simple_page.current_values())
+        selection = self._scan_page.selection()
+        if selection is not None:
+            values.update(self._selection_values(selection))
         self._scan_page.set_output_path(output)
         self._scan_page.clear_log()
+        self._previewing = False
         self._scan_job.start(self._device.name, self._options, values, output)
+
+    def _selection_values(self, selection):
+        area = find_area_options(self._options)
+        if area is None:
+            return {}
+        bed = bed_size(self._options)
+        size = self._scan_page.preview_size()
+        return selection_values(selection, size, bed, area)
+
+    def _start_preview(self) -> None:
+        """Take a fast picture of the whole scan bed at the lowest resolution."""
+        if self._device is None:
+            self.statusBar().showMessage("Select a scanner first.")
+            return
+        if not self._options:
+            self.statusBar().showMessage("Read the scanner options first.")
+            return
+        values = self._preview_values()
+        output = self._preview_dir / "preview.tiff"
+        if output.exists():
+            output.unlink()
+        self._previewing = True
+        self._scan_page.clear_log()
+        self.statusBar().showMessage("Taking a preview of the scan bed…")
+        self._scan_job.start(self._device.name, self._options, values, output)
+
+    def _preview_values(self) -> dict[str, str]:
+        """The lowest resolution and the whole bed, for the preview."""
+        values = dict(self._options_page.current_values())
+        resolution = find_option(self._options, "resolution")
+        if resolution is not None:
+            lowest = option_minimum(resolution)
+            if lowest:
+                values["resolution"] = lowest
+        values.update(full_bed_values(self._options))
+        return values
+
+    def _show_preview(self, path: Path) -> None:
+        image = QImage(str(path))
+        if image.isNull():
+            self._scan_page.set_busy(False)
+            self.statusBar().showMessage("Could not read the preview image.")
+            return
+        self._scan_page.set_busy(False)
+        self._scan_page.set_preview(image)
+        self._state.transition(AppState.OPTIONS_LOADED)
+        self.statusBar().showMessage("Preview ready — drag over it to pick an area.")
 
     def _on_simple_settings_changed(self, values: dict) -> None:
         """The simple mode changed a setting — keep the full form in step."""
@@ -284,21 +351,43 @@ class MainWindow(QMainWindow):
             self._options_page.set_value(name, value)
 
     def _on_output_dir_chosen(self, path: str) -> None:
+        # The save location is remembered for both the TIFFs and the photographs.
         self._config["raw_dir"] = path
+        self._config["photo_dir"] = path
         save_config(self._config)
         self._scan_page.set_output_dir(path)
         self._scan_page.set_output_path(next_output_path(Path(path)))
         self._simple_page.set_output_dir(path)
-        self.statusBar().showMessage(f"Raw scans will be saved to {path}")
+        self.statusBar().showMessage(f"Scans will be saved to {path}")
 
     def _on_scan_started(self, path: str) -> None:
         self._scan_page.set_busy(True)
         self._simple_page.set_busy(True)
-        self._simple_page.set_status("Scanning…")
-        self._state.transition(AppState.SCANNING)
-        self.statusBar().showMessage(f"Scanning to {path}")
+        if self._previewing:
+            self._simple_page.set_status("Taking a preview…")
+            self._state.transition(AppState.SCANNING)
+            self.statusBar().showMessage("Taking a preview of the scan bed…")
+        else:
+            self._simple_page.set_status("Scanning…")
+            self._state.transition(AppState.SCANNING)
+            self.statusBar().showMessage(f"Scanning to {path}")
 
     def _on_scan_finished(self, path: str) -> None:
+        if self._previewing:
+            self._previewing = False
+            self._show_preview(Path(path))
+            return
+        # Pro mode: the TIFF is the result, no photo recognition.
+        if self._modes.currentIndex() == _MODE_PRO:
+            self._scan_page.set_busy(False)
+            self._scan_page.set_processing(False)
+            self._scan_page.set_progress(100)
+            self._simple_page.set_busy(False)
+            self._simple_page.set_progress(100)
+            self._state.transition(AppState.DONE)
+            self.statusBar().showMessage(f"Scan saved to {path}")
+            self._simple_page.set_status(f"Scan saved to {path}")
+            return
         self._scan_page.set_processing(True)
         self._scan_page.set_progress(100)
         self._simple_page.set_progress(100)
@@ -308,7 +397,7 @@ class MainWindow(QMainWindow):
 
     def _start_processing(self, scan_path: Path) -> None:
         """Look for photographs in the finished scan, off the UI thread."""
-        photo_dir = Path(self._config.get("photo_dir") or DEFAULTS["photo_dir"])
+        photo_dir = Path(self._raw_dir())
         task = PhotoTask(scan_path, photo_dir, next_number(photo_dir, "jpg"))
         task.signals.finished.connect(self._on_photos_found)
         task.signals.failed.connect(self._on_photos_failed)
@@ -336,6 +425,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Photo detection: {message}")
 
     def _on_scan_failed(self, message: str) -> None:
+        if self._previewing:
+            self._previewing = False
         # A failed start (e.g. "a scan is already running") must not disturb a
         # scan that is still going.
         busy = self._scan_job.busy
@@ -347,6 +438,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Scan failed: {message}")
 
     def _on_scan_cancelled(self) -> None:
+        if self._previewing:
+            self._previewing = False
         self._scan_page.set_busy(False)
         self._simple_page.set_busy(False)
         self._state.transition(AppState.OPTIONS_LOADED)
@@ -358,16 +451,25 @@ class MainWindow(QMainWindow):
     def _on_mode_changed(self, index: int) -> None:
         """Switch between the everyday view and the full one."""
         self._modes.setCurrentIndex(index)
-        if index == _MODE_DEV:
+        if index == _MODE_PRO:
             self._nav.setCurrentRow(0)
+            # Pro mode does not run photo recognition; the Results page is not used.
+            self._refresh_nav()
+        else:
+            self._refresh_nav()
         self.statusBar().showMessage(
-            "Simple mode" if index == _MODE_SIMPLE else "DEV-Mode"
+            "Simple mode" if index == _MODE_SIMPLE else "Pro Mode"
         )
+
+    def _refresh_nav(self) -> None:
+        self._on_state_changed(self._state.state, self._state.state)
 
     # ---- state machine ----
 
     def _on_state_changed(self, _old, new_state) -> None:
-        allowed = _NAV_BY_STATE.get(new_state, {"Scanner"})
+        allowed = set(_NAV_BY_STATE.get(new_state, {"Scanner"}))
+        if self._modes.currentIndex() == _MODE_PRO:
+            allowed.discard("Results")
         for row, label in enumerate(_NAV_ITEMS):
             item = self._nav.item(row)
             flags = item.flags()
@@ -384,4 +486,8 @@ class MainWindow(QMainWindow):
         self._scanner.stop()
         self._loader.stop()
         self._scan_job.stop()
+        import shutil
+
+        if hasattr(self, "_preview_dir"):
+            shutil.rmtree(self._preview_dir, ignore_errors=True)
         super().closeEvent(event)

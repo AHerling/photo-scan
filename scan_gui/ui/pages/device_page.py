@@ -64,7 +64,12 @@ class DevicePage(QWidget):
             )
         else:
             self._status.setText(
-                "No scanners found. Check the connection and press Refresh."
+                "No scanners found.\n\n"
+                "USB: connect the scanner, add your user to scanner/lp groups "
+                "(log out and back in).\n\n"
+                "Network/WiFi (AirScan/eSCL): install sane-airscan and avahi, "
+                "start avahi-daemon, ensure same network.\n\n"
+                "Press Refresh to try again."
             )
 
     def set_error(self, message: str) -> None:
