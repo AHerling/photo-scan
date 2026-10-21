@@ -11,29 +11,55 @@ class Device:
     description: str # e.g. "CANON Canon PIXMA MP610 Scanner"
 
 
-# ---- Added in M2 (option editing) ----
-
 class OptionType:
+    """The kind of value an option accepts."""
+
     BOOL = "BOOL"
     INTEGER = "INTEGER"
-    WORD = "WORD"
+    FLOAT = "FLOAT"
     STRING = "STRING"
     FIXED = "FIXED"
 
 
+class OptionConstraint:
+    """The kind of constraint an option carries."""
+
+    RANGE = "RANGE"
+    LIST = "LIST"
+
+
 @dataclass(frozen=True)
 class OptionDescriptor:
-    """One editable option of a SANE device, from `scanimage --get-options`."""
+    """One option of a SANE device, parsed from `scanimage -A`.
 
-    name: str
-    title: str
+    `constraint` is one of:
+        None                              -- free value
+        (OptionConstraint.RANGE, min, max, step)
+        (OptionConstraint.LIST, [values...])
+    """
+
+    name: str                 # SANE option name, e.g. "resolution"
+    flag: str = ""            # command line form as printed, e.g. "--resolution"
     description: str = ""
     type: str = OptionType.STRING
-    unit: str = "NONE"
+    unit: str = "NONE"        # "dpi", "mm", "pel", "bit", "us", "%" or "NONE"
     current: str | None = None
-    default: str | None = None
-    # Constraint: None (none), ("RANGE", min, max, step), ("LIST", [values...])
     constraint: tuple | None = None
+    read_only: bool = False
+    advanced: bool = False
+    inactive: bool = False
+    hardware: bool = False
+
+    @property
+    def choices(self) -> list[str]:
+        """Allowed values for a list constraint, empty otherwise."""
+        if self.constraint and self.constraint[0] == OptionConstraint.LIST:
+            return list(self.constraint[1])
+        return []
+
+    @property
+    def is_numeric(self) -> bool:
+        return self.type in (OptionType.INTEGER, OptionType.FLOAT)
 
 
 @dataclass(frozen=True)

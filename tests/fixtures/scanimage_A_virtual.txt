@@ -1,0 +1,15 @@
+
+All options specific to device `virtual:virtual_scanner':
+    --mode Color [Color]
+        Selects the scan mode (Color)
+    --resolution 50..600dpi (in steps of 50) [300]
+        Sets the resolution of the scanned image in DPI
+    -l 0..215.9mm [0]
+        Top-left x position of scan area
+    -t 0..297mm [0]
+        Top-left y position of scan area
+    -x 0..215.9mm [215.9]
+        Width of scan-area.
+    -y 0..297mm [297]
+        Height of scan-area.
+

@@ -28,7 +28,7 @@ printer-gui/
 │   ├── state.py                    # AppState enum + AppStateMachine (signals on transitions)
 │   ├── backend/                    # ALL scanimage access — QtCore only, never QtWidgets
 │   │   ├── devices.py              # `scanimage -L` parsing + async DeviceScanner (QProcess)
-│   │   ├── options.py              # `--get-options` parsing → OptionDescriptors; builds -o args (M2)
+│   │   ├── options.py              # `scanimage -A` parsing → OptionDescriptors; builds option args (M2 — done)
 │   │   └── scan.py                 # ScanJob: QProcess wrapper, progress parsing, cancel (M3)
 │   ├── processing/
 │   │   ├── photos.py               # detect + crop photographs (ported from scan.sh's python block)
@@ -37,18 +37,18 @@ printer-gui/
 │       ├── main_window.py          # QMainWindow: nav sidebar + QStackedWidget + status bar
 │       ├── pages/
 │       │   ├── device_page.py      # scanner list, refresh (M1 — done)
-│       │   ├── options_page.py     # generated option form, Apply, presets (M2)
+│       │   ├── options_page.py     # generated option form, Apply, presets (M2 — done)
 │       │   ├── scan_page.py        # Start/Cancel, progress bar, log (M3)
 │       │   └── results_page.py     # preview grid of cropped photos (M4)
 │       └── widgets/
-│           └── option_widgets.py   # factory: OptionDescriptor → Qt widget (M2)
+│           └── option_widgets.py   # factory: OptionDescriptor → Qt widget (M2 — done)
 ├── data/                           # .desktop file, icons (M5)
 ├── packaging/
 │   └── scan-gui.spec               # RPM spec (M5)
 └── tests/
     ├── fixtures/                   # captured scanimage output (no hardware needed)
     ├── test_devices_parsing.py
-    ├── test_options_parsing.py     # M2
+    ├── test_options_parsing.py     # M2 — done
     └── test_photos.py              # M4
 ```
 
@@ -88,17 +88,45 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
 
 | # | Deliverable | Status |
 |---|---|---|
-| M1 | App skeleton, nav, real device discovery (`scanimage -L`), device selection, last-device memory | **current** |
-| M2 | Option descriptors (`--get-options` parsing), generated option form, Apply, saved presets | |
-| M3 | Async scan job: progress bar, cancel, raw TIFF output, sequential numbering | |
+| M1 | App skeleton, nav, real device discovery (`scanimage -L`), device selection, last-device memory | **done** |
+| M2 | Option descriptors (`scanimage -A` parsing), generated option form, Apply, saved presets | **done** |
+| M3 | Async scan job: progress bar, cancel, raw TIFF output, sequential numbering | next |
 | M4 | Photo detection + crop (port of scan.sh python), result preview grid | |
 | M5 | `.desktop` file, icons, RPM spec, polish | |
 
-### Spike items (resolve in M2/M3, then freeze as fixtures)
+### Spike items (resolved — answers recorded here)
 
-1. Exact `scanimage -d <dev> --get-options` descriptor format in
-   sane-backends 1.4.0 (types, constraints, current values).
-2. `--progress` output format on stderr → progress bar percentage.
+1. **Option descriptors.** `scanimage --get-options` does not exist in
+   sane-backends 1.4.0; the flag is **`-A` / `--all-options`**
+   (`scanimage --help -d DEV` prints the same list). One block per option:
+
+   ```
+       --resolution 50..600dpi (in steps of 50) [300]
+           Sets the resolution of the scanned image in DPI
+   ```
+
+   The layout comes from `print_option()` in `tools/scanimage.c`: name
+   (four-space indent, single dash for the `t`/`l`/`x`/`y` window options),
+   constraint, current value in `[...]`, optional flags (`[advanced]`,
+   `[read-only]`, `[inactive]`, `[hardware]`), then the description indented
+   eight spaces. Constraints are `a..b[unit] (in steps of n)` for ranges,
+   `a|b|c` for lists, `<int>`/`<float>`/`<string>` for free values, and
+   BOOL options print their constraint glued to the name: `[=(yes|no)]`.
+   Types are *not* printed, so `backend/options.py` infers them.
+
+   **Options are set on the command line, not with `-o`:** scanimage's `-o`
+   is `--output-file`. `scanimage -d DEV --resolution 1200 --mode Color` is
+   the correct form, and the names printed by `-A` are accepted verbatim.
+
+2. **Progress.** `--progress` writes `Progress: 3.9%\rProgress: 7.8%\r…` to
+   stderr — carriage-return separated, so the parser must split on `\r` as
+   well as `\n`.
+
+3. **Testing without hardware.** sane-backends' virtual scanner
+   (`virtual:virtual_scanner`) is present on the test machine and produces
+   real TIFFs, so M3/M4 can be developed end to end. Note that `scanimage -L`
+   takes ~4 s there while `scanimage -A` is instantaneous.
+
 
 ## Where scan.sh went
 

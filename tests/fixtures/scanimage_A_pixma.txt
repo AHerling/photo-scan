@@ -1,0 +1,42 @@
+# SYNTHETIC FIXTURE — hand written to mimic `scanimage -A` output of a
+# Canon PIXMA MP610 (pixma backend, sane-backends 1.4.0). Not captured from
+# real hardware: the pixma backend is not available on the test machine.
+# Only the virtual scanner fixture next to it is a real capture.
+
+All options specific to device `pixma:04A91913_5E2C64':
+    --mode Color|Gray|Lineart [Color]
+        Selects the scan mode (Color|Gray|Lineart)
+    --resolution 75..1200dpi (in steps of 1) [75]
+        Sets the resolution of the scanned image in DPI
+    --brightness -100..100% (in steps of 1) [0]
+        Controls the brightness of the acquired image
+    --contrast -100..100% (in steps of 1) [0]
+        Controls the contrast of the acquired image
+    --source Flatbed|ADF|ADF Duplex [Flatbed]
+        Selects the scan source (such as a document-feeder).
+    --threshold 0..100% (in steps of 1) [0]
+        Selects the threshold of the scanned image.
+    --gamma-correction[=(yes|no)] [yes]
+        Controls whether gamma correction is applied.
+    --adf-load[=(yes|no)] [no]
+        Loads the document feeder.
+    --jpeg-quality 10..100 [75]
+        Sets the JPEG quality factor.
+    --sensor-lid-color <string> [white]
+        Sets the sensor lid color.
+    -l 0..216mm [0]
+        Top-left x position of scan area
+    -t 0..297mm [0]
+        Top-left y position of scan area
+    -x 0..216mm [216]
+        Width of scan-area.
+    -y 0..297mm [297]
+        Height of scan-area.
+    --warmup-lamp[=(yes|no)] [yes] [hardware]
+        Keeps the lamp on to speed up the next scan.
+    --exposure 0..65535 [0] [read-only]
+        Exposure time reported by the hardware.
+    --auto-focus <int> [inactive]
+        Not available on this scanner.
+    --advanced-calibration 0..100 [50] [advanced]
+        Calibration offset used by the service software.
