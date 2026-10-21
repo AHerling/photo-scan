@@ -1,6 +1,6 @@
 [project]
 name = "photo-scan"
-version = "0.1.0"
+version = "0.2.0"
 description = "Photo Scan — Qt6 GUI for SANE scanners with automatic photo detection and cropping"
 readme = "README.md"
 license = {text = "MIT"}
@@ -9,13 +9,11 @@ requires-python = ">=3.12"
 #   Fedora: sudo dnf install python3-pyside6 python3-opencv sane-backends sane-airscan avahi
 dependencies = []
 
+# Photo Scan is a desktop application and has no command-line interface.
+# The only entry point is the GUI launcher, which the .desktop file and the
+# Flatpak manifest both invoke as `photo-scan`.
 [project.gui-scripts]
 photo-scan = "scan_gui.app:main"
-scan-gui = "scan_gui.app:main"
-
-[project.scripts]
-photo-scan-cli = "scan_gui.app:main"
-scan-gui-cli = "scan_gui.app:main"
 
 [build-system]
 requires = ["setuptools>=68"]
