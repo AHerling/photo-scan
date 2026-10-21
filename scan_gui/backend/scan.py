@@ -42,20 +42,28 @@ def split_chunks(text: str, final: bool = False) -> tuple[list[str], str]:
     return [chunk.strip() for chunk in chunks if chunk.strip()], remainder
 
 
-def next_output_path(directory: Path, extension: str = OUTPUT_FORMAT) -> Path:
-    """Return the next free numbered output path, e.g. `000007.tiff`.
+def next_number(directory: Path, extension: str = OUTPUT_FORMAT) -> int:
+    """The next free six digit number for files with that extension.
 
-    Follows the numbering of the original scan.sh: six digits, counting from
-    the highest number already present in the directory.
+    Follows the numbering of the original scan.sh: count from the highest
+    number already present in the directory.
     """
     directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
+    if not directory.is_dir():
+        return 1
     highest = 0
     for entry in directory.iterdir():
         match = _NUMBER_RE.match(entry.name)
         if match and entry.suffix.lower() == f".{extension}":
             highest = max(highest, int(match.group("number")))
-    return directory / f"{highest + 1:06d}.{extension}"
+    return highest + 1
+
+
+def next_output_path(directory: Path, extension: str = OUTPUT_FORMAT) -> Path:
+    """Return the next free numbered output path, e.g. `000007.tiff`."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory / f"{next_number(directory, extension):06d}.{extension}"
 
 
 def build_scan_command(
@@ -94,6 +102,7 @@ class ScanJob(QObject):
         self._buffer = ""
         self._last_message = ""
         self._output_path: Path | None = None
+        self._created_output = False
         self._percent = 0
         self._cancelled = False
         self._lock: QLockFile | None = None
@@ -120,6 +129,9 @@ class ScanJob(QObject):
 
         self._output_path = Path(output_path)
         self._output_path.parent.mkdir(parents=True, exist_ok=True)
+        # Only ever delete a file this scan created — a pre-existing file in
+        # the output folder belongs to the user.
+        self._created_output = not self._output_path.exists()
 
         # scan.sh used flock to keep two scans from colliding; QLockFile does
         # the same and clears the lock when the process dies.
@@ -205,8 +217,12 @@ class ScanJob(QObject):
             self.failed.emit("Could not run scanimage. Is sane-backends installed?")
 
     def _remove_output(self) -> None:
-        """Delete a partial or empty output file."""
-        if self._output_path and self._output_path.exists():
+        """Delete a partial or empty output file — never a pre-existing one."""
+        if (
+            self._output_path
+            and self._created_output
+            and self._output_path.exists()
+        ):
             try:
                 self._output_path.unlink()
             except OSError:

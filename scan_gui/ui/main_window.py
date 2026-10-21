@@ -6,7 +6,7 @@ them to the backend and the app state machine.
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QThreadPool, Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -18,9 +18,10 @@ from PySide6.QtWidgets import (
 
 from scan_gui.backend.devices import DeviceScanner
 from scan_gui.backend.options import OptionLoader
-from scan_gui.backend.scan import ScanJob, next_output_path
+from scan_gui.backend.scan import ScanJob, next_number, next_output_path
 from scan_gui.config import DEFAULTS, load_config, save_config
 from scan_gui.models import Device, OptionDescriptor
+from scan_gui.processing.worker import PhotoTask
 from scan_gui.state import AppState, AppStateMachine
 from scan_gui.ui.pages.device_page import DevicePage
 from scan_gui.ui.pages.options_page import OptionsPage
@@ -52,6 +53,8 @@ class MainWindow(QMainWindow):
         self._scanner = DeviceScanner(self)
         self._loader = OptionLoader(self)
         self._scan_job = ScanJob(self)
+        self._pool = QThreadPool(self)
+        self._pool.setMaxThreadCount(1)
         self._device: Device | None = None
         self._options: list[OptionDescriptor] = []
         self._option_values: dict[str, str] = {}
@@ -218,10 +221,32 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Scanning to {path}")
 
     def _on_scan_finished(self, path: str) -> None:
-        self._scan_page.set_busy(False)
+        self._scan_page.set_processing(True)
         self._scan_page.set_progress(100)
+        self._state.transition(AppState.PROCESSING)
+        self._start_processing(Path(path))
+
+    def _start_processing(self, scan_path: Path) -> None:
+        """Look for photographs in the finished scan, off the UI thread."""
+        photo_dir = Path(self._config.get("photo_dir") or DEFAULTS["photo_dir"])
+        task = PhotoTask(scan_path, photo_dir, next_number(photo_dir, "jpg"))
+        task.signals.finished.connect(self._on_photos_found)
+        task.signals.failed.connect(self._on_photos_failed)
+        self._pool.start(task)
+
+    def _on_photos_found(self, paths: list) -> None:
+        self._scan_page.set_processing(False)
+        source = self._scan_page.output_path()
+        self._results_page.set_photos(paths, str(source) if source else "")
         self._state.transition(AppState.DONE)
-        self.statusBar().showMessage(f"Scan complete: {path}")
+        self._nav.setCurrentRow(3)
+        self.statusBar().showMessage(f"{len(paths)} photograph(s) detected.")
+
+    def _on_photos_failed(self, message: str) -> None:
+        self._scan_page.set_processing(False)
+        self._results_page.set_error(message)
+        self._state.transition(AppState.DONE)
+        self.statusBar().showMessage(f"Photo detection: {message}")
 
     def _on_scan_failed(self, message: str) -> None:
         # A failed start (e.g. "a scan is already running") must not disturb a

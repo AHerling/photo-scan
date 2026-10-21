@@ -4,6 +4,8 @@ Start/Cancel, a progress bar fed by ScanJob's stderr progress stream, and a
 live log of the scan.
 """
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -33,6 +35,7 @@ class ScanPage(QWidget):
         heading.setObjectName("pageHeading")
 
         self._device_label = QLabel("No scanner selected.")
+        self._output_path: Path | None = None
         self._output_label = QLabel("No output file yet.")
         self._output_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
@@ -84,7 +87,12 @@ class ScanPage(QWidget):
         self._folder_button.setText(path)
 
     def set_output_path(self, path) -> None:
+        self._output_path = Path(path)
         self._output_label.setText(f"Next file: {path}")
+
+    def output_path(self) -> Path | None:
+        """The file the last scan was written to."""
+        return self._output_path
 
     def _choose_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(
@@ -94,10 +102,16 @@ class ScanPage(QWidget):
             self.output_dir_requested.emit(folder)
 
     def set_busy(self, busy: bool) -> None:
+        """While a scan runs: Start is off, Cancel is on."""
         self._start_button.setEnabled(not busy)
         self._cancel_button.setEnabled(busy)
         if busy:
             self._progress.setValue(0)
+
+    def set_processing(self, processing: bool) -> None:
+        """While the photos are being cropped: Start is off, Cancel stays off."""
+        self._start_button.setEnabled(not processing)
+        self._cancel_button.setEnabled(False)
 
     def set_progress(self, percent: int) -> None:
         self._progress.setValue(percent)

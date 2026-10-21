@@ -31,15 +31,15 @@ printer-gui/
 │   │   ├── options.py              # `scanimage -A` parsing → OptionDescriptors; builds option args (M2 — done)
 │   │   └── scan.py                 # ScanJob: QProcess wrapper, progress parsing, cancel (M3)
 │   ├── processing/
-│   │   ├── photos.py               # detect + crop photographs (ported from scan.sh's python block)
-│   │   └── worker.py               # QRunnable wrapper so OpenCV never blocks the UI (M4)
+│   │   ├── photos.py               # detect + crop photographs (ported from scan.sh's python block) — M4, done
+│   │   └── worker.py               # QRunnable wrapper so OpenCV never blocks the UI (M4 — done)
 │   └── ui/                         # imports backend + models; never builds scanimage commands itself
 │       ├── main_window.py          # QMainWindow: nav sidebar + QStackedWidget + status bar
 │       ├── pages/
 │       │   ├── device_page.py      # scanner list, refresh (M1 — done)
 │       │   ├── options_page.py     # generated option form, Apply, presets (M2 — done)
 │       │   ├── scan_page.py        # Start/Cancel, progress bar, log (M3)
-│       │   └── results_page.py     # preview grid of cropped photos (M4)
+│       │   └── results_page.py     # preview grid of cropped photos (M4 — done)
 │       └── widgets/
 │           └── option_widgets.py   # factory: OptionDescriptor → Qt widget (M2 — done)
 ├── data/                           # .desktop file, icons (M5)
@@ -49,7 +49,8 @@ printer-gui/
     ├── fixtures/                   # captured scanimage output (no hardware needed)
     ├── test_devices_parsing.py
     ├── test_options_parsing.py     # M2 — done
-    └── test_photos.py              # M4
+    ├── test_photos.py              # M4 — done
+    └── test_photo_worker.py        # M4 — done
 ```
 
 ## Layering rules
@@ -91,7 +92,7 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
 | M1 | App skeleton, nav, real device discovery (`scanimage -L`), device selection, last-device memory | **done** |
 | M2 | Option descriptors (`scanimage -A` parsing), generated option form, Apply, saved presets | **done** |
 | M3 | Async scan job: progress bar, cancel, raw TIFF output, sequential numbering | **done** |
-| M4 | Photo detection + crop (port of scan.sh python), result preview grid | |
+| M4 | Photo detection + crop (port of scan.sh python), result preview grid | **done** |
 | M5 | `.desktop` file, icons, RPM spec, polish | |
 
 ### Spike items (resolved — answers recorded here)
@@ -127,6 +128,16 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
    real TIFFs, so M3/M4 can be developed end to end. Note that `scanimage -L`
    takes ~4 s there while `scanimage -A` is instantaneous.
 
+4. **Photo detection.** The OpenCV block of `scan.sh` is ported as it was:
+   greyscale the page, invert everything darker than 215 (the "content"
+   threshold), close the mask with a 25×25 kernel and open it with 5×5, then
+   keep the external contours that are at least 1.5 % of the page, at least
+   45 % filled, not more than 3.5:1 elongated and at least 1 % away from the
+   page edge. The four biggest candidates win and are numbered in reading
+   order (top to bottom, left to right). The search runs on a copy scaled to
+   2400 px wide, but the crops are taken from the full-resolution scan with
+   a perspective transform, so the photos keep their original pixels.
+
 
 ## Where scan.sh went
 
@@ -137,4 +148,4 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
 | Fixed `--resolution 1200` | editable option / saved preset (M2) |
 | TIFF output + `next_number()` | `backend/scan.py` + `config.py` output dirs (M3 — done) |
 | `flock` lock file | `QLockFile` in `backend/scan.py` + ScanJob guard (M3 — done) |
-| Embedded OpenCV detection/crop python | `processing/photos.py` (M4) |
+| Embedded OpenCV detection/crop python | `processing/photos.py` (M4 — done) |
