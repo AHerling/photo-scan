@@ -1,59 +1,82 @@
+%global forgeurl https://github.com/AHerling/photo-scan
+
 Name:           photo-scan
-Version:        0.1.0
+Version:        0.2.0
 Release:        1%{?dist}
-Summary:        Qt6 GUI for SANE scanners with photo detection and cropping
+Summary:        Desktop app for SANE scanners with photo detection and cropping
 
 License:        MIT
-URL:            https://github.com/AHerling/photo-scan
+URL:            %{forgeurl}
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
+BuildRequires:  python3-devel >= 3.12
 BuildRequires:  python3-setuptools
+BuildRequires:  python3-wheel
+BuildRequires:  python3-pyside6
+BuildRequires:  python3-opencv
+BuildRequires:  python3-numpy
+BuildRequires:  desktop-file-utils
+
 Requires:       python3 >= 3.12
 Requires:       python3-pyside6
 Requires:       python3-opencv
+Requires:       python3-numpy
 Requires:       sane-backends
 Requires:       sane-airscan
 Requires:       avahi
 
 %description
-Photo Scan is a simple Qt6 desktop app for SANE scanners on Linux. It helps you
-scan documents and photographs with automatic photo detection and cropping.
-Features: discover USB/network/AirScan/eSCL scanners, Simple and Pro modes,
-preview and area selection, automatic photo detection and cropping, and
-scanning to a user-selected folder.
+Photo Scan is a desktop application for SANE scanners on Linux. It helps you
+scan documents and photographs, and automatically detects and crops the photos
+on the scanner bed.
+
+* Simple mode for everyday scanning: pick a scanner, colour mode, resolution
+  and destination folder, then press one button.
+* Pro mode for full control: every SANE option the device exposes, a live bed
+  preview and interactive area selection.
+* Automatic photo detection, including cropping several photos out of a single
+  scan.
+* Automatic file numbering in the folder you choose.
+
+USB scanners need the scanner and lp groups; network scanners need the Avahi
+daemon running.
 
 %prep
-%setup -q
+%autosetup -n %{name}-%{version}
 
 %build
-%py3_build
+%pyproject_wheel
 
 %install
-%py3_install
-install -Dm644 org.photo.scan.desktop %{buildroot}%{_datadir}/applications/org.photo.scan.desktop
-install -Dm644 photo-scan.desktop %{buildroot}%{_datadir}/applications/photo-scan.desktop
-install -Dm644 org.photo.scan.metainfo.xml %{buildroot}%{_datadir}/metainfo/org.photo.scan.metainfo.xml
-install -Dm644 LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
-install -Dm644 photo-scan.png %{buildroot}%{_datadir}/icons/hicolor/48x48/apps/org.photo.scan.png 2>/dev/null || true
-install -Dm644 photo-scan.png %{buildroot}%{_datadir}/icons/hicolor/256x256/apps/org.photo.scan.png 2>/dev/null || true
+%pyproject_install
+%pyproject_save_files -l scan_gui
 
-%files
+desktop-file-install --dir %{buildroot}%{_datadir}/applications \
+    data/io.github.AHerling.photo-scan.desktop
+desktop-file-validate \
+    %{buildroot}%{_datadir}/applications/io.github.AHerling.photo-scan.desktop
+
+install -Dm644 data/io.github.AHerling.photo-scan.metainfo.xml \
+    %{buildroot}%{_datadir}/metainfo/io.github.AHerling.photo-scan.metainfo.xml
+
+install -Dm644 data/icons/hicolor/scalable/apps/io.github.AHerling.photo-scan.svg \
+    %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/io.github.AHerling.photo-scan.svg
+for size in 16 24 32 48 64 128 256; do
+    install -Dm644 data/icons/hicolor/${size}x${size}/apps/io.github.AHerling.photo-scan.png \
+        %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/io.github.AHerling.photo-scan.png
+done
+
+%check
+%{__python3} -m unittest discover -s tests
+
+%files -f %{pyproject_files}
 %license LICENSE
-%{python3_sitelib}/scan_gui/
-%{python3_sitelib}/photo_scan-*.egg-info/
 %{_bindir}/photo-scan
-%{_bindir}/photo-scan-cli
-%{_bindir}/scan-gui
-%{_bindir}/scan-gui-cli
-%{_datadir}/applications/org.photo.scan.desktop
-%{_datadir}/applications/photo-scan.desktop
-%{_datadir}/metainfo/org.photo.scan.metainfo.xml
-%{_datadir}/icons/hicolor/*/apps/org.photo.scan.png
-%{_licensedir}/%{name}/LICENSE
+%{_datadir}/applications/io.github.AHerling.photo-scan.desktop
+%{_datadir}/metainfo/io.github.AHerling.photo-scan.metainfo.xml
+%{_datadir}/icons/hicolor/*/apps/io.github.AHerling.photo-scan.*
 
 %changelog
-* Tue Oct 21 2026 Photo Scan Contributors <noreply@github.com> - 0.1.0-1
-- Initial package for Flathub/Bazaar compliance with Photo Scan branding.
-- Added AirScan/eSCL support, preview/area selection, and Pro mode.
-- Automatic photo detection and cropping.
+* Wed Oct 21 2026 Photo Scan Contributors <noreply@github.com> - 0.2.0-1
+- Initial Fedora package.
