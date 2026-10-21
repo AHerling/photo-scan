@@ -1,6 +1,16 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 build/
 dist/
 .venv/
+
+# Packaging artifacts
+*.rpm
+*.rpmbuild/
+*.deb
+*.tar.gz
+.flatpak-builder/
+build-dir/
+repo/
