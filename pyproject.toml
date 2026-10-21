@@ -1,0 +1,18 @@
+[project]
+name = "scan-gui"
+version = "0.1.0"
+description = "Qt6 GUI for SANE scanners with automatic photo detection and cropping"
+requires-python = ">=3.12"
+# Dependencies are system RPMs on Fedora, not pip packages:
+#   sudo dnf install python3-pyside6 python3-opencv sane-backends
+dependencies = []
+
+[project.gui-scripts]
+scan-gui = "scan_gui.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["scan_gui*"]

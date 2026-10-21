@@ -1,0 +1,5 @@
+device `pixma:04A91913_5E2C64' is a CANON Canon PIXMA MP610 Scanner
+device `escl:https://192.168.1.10:443/eSCL/' is a epsonscan2 network scanner
+device `dnssd://HP%20LaserJet%20M277._ipp._tcp.local/' is a HP LaserJet MFP (driver:hplip)
+[W] sane_add_option_handle: ignoring option no
+device `pixma:04A91913_5E2C64' is a CANON Canon PIXMA MP610 Scanner
