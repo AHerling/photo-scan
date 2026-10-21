@@ -4,6 +4,8 @@ Pages never call each other directly — they emit signals and the window wires
 them to the backend and the app state machine.
 """
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
@@ -16,8 +18,9 @@ from PySide6.QtWidgets import (
 
 from scan_gui.backend.devices import DeviceScanner
 from scan_gui.backend.options import OptionLoader
-from scan_gui.config import load_config, save_config
-from scan_gui.models import Device
+from scan_gui.backend.scan import ScanJob, next_output_path
+from scan_gui.config import DEFAULTS, load_config, save_config
+from scan_gui.models import Device, OptionDescriptor
 from scan_gui.state import AppState, AppStateMachine
 from scan_gui.ui.pages.device_page import DevicePage
 from scan_gui.ui.pages.options_page import OptionsPage
@@ -48,7 +51,9 @@ class MainWindow(QMainWindow):
         self._state = AppStateMachine(self)
         self._scanner = DeviceScanner(self)
         self._loader = OptionLoader(self)
+        self._scan_job = ScanJob(self)
         self._device: Device | None = None
+        self._options: list[OptionDescriptor] = []
         self._option_values: dict[str, str] = {}
 
         # --- layout: nav sidebar + stacked pages ---
@@ -102,6 +107,15 @@ class MainWindow(QMainWindow):
         self._options_page.preset_delete_requested.connect(self._on_preset_delete)
         self._options_page.set_presets(self._config.get("presets", {}))
 
+        self._scan_page.start_requested.connect(self._start_scan)
+        self._scan_page.cancel_requested.connect(self._scan_job.cancel)
+        self._scan_job.started.connect(self._on_scan_started)
+        self._scan_job.progress.connect(self._scan_page.set_progress)
+        self._scan_job.log.connect(self._scan_page.append_log)
+        self._scan_job.finished.connect(self._on_scan_finished)
+        self._scan_job.failed.connect(self._on_scan_failed)
+        self._scan_job.cancelled.connect(self._on_scan_cancelled)
+
         # Kick off the initial device discovery once the event loop is running.
         QTimer.singleShot(0, self._device_page.refresh_requested)
 
@@ -123,6 +137,8 @@ class MainWindow(QMainWindow):
     def _on_device_selected(self, device: Device | None) -> None:
         self._device = device
         self._options_page.set_device(device)
+        self._scan_page.set_device(device)
+        self._options = []
         self._option_values = {}
         if device is None:
             self._state.transition(AppState.NO_DEVICE)
@@ -137,6 +153,7 @@ class MainWindow(QMainWindow):
     # ---- option handlers ----
 
     def _on_options_loaded(self, options: list) -> None:
+        self._options = list(options)
         self._options_page.set_options(options)
         self._state.transition(AppState.OPTIONS_LOADED)
         self.statusBar().showMessage(
@@ -169,6 +186,44 @@ class MainWindow(QMainWindow):
         self._options_page.set_presets(presets)
         self.statusBar().showMessage(f"Preset '{name}' deleted.")
 
+    # ---- scan handlers ----
+
+    def _start_scan(self) -> None:
+        if self._device is None:
+            self.statusBar().showMessage("Select a scanner first.")
+            return
+        raw_dir = self._config.get("raw_dir") or DEFAULTS["raw_dir"]
+        output = next_output_path(Path(raw_dir))
+        values = self._options_page.current_values()
+        self._scan_page.set_output_path(output)
+        self._scan_page.clear_log()
+        self._scan_job.start(self._device.name, self._options, values, output)
+
+    def _on_scan_started(self, path: str) -> None:
+        self._scan_page.set_busy(True)
+        self._state.transition(AppState.SCANNING)
+        self.statusBar().showMessage(f"Scanning to {path}")
+
+    def _on_scan_finished(self, path: str) -> None:
+        self._scan_page.set_busy(False)
+        self._scan_page.set_progress(100)
+        self._state.transition(AppState.DONE)
+        self.statusBar().showMessage(f"Scan complete: {path}")
+
+    def _on_scan_failed(self, message: str) -> None:
+        # A failed start (e.g. "a scan is already running") must not disturb a
+        # scan that is still going.
+        busy = self._scan_job.busy
+        self._scan_page.set_busy(busy)
+        if not busy:
+            self._state.transition(AppState.OPTIONS_LOADED)
+        self.statusBar().showMessage(f"Scan failed: {message}")
+
+    def _on_scan_cancelled(self) -> None:
+        self._scan_page.set_busy(False)
+        self._state.transition(AppState.OPTIONS_LOADED)
+        self.statusBar().showMessage("Scan cancelled.")
+
     # ---- state machine ----
 
     def _on_state_changed(self, _old, new_state) -> None:
@@ -188,4 +243,5 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         self._scanner.stop()
         self._loader.stop()
+        self._scan_job.stop()
         super().closeEvent(event)

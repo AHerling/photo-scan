@@ -6,7 +6,7 @@ Discover scanner devices, edit their SANE options, run scans, and
 automatically detect and crop photographs from the scanned image — a GUI
 successor to `scan.sh`.
 
-**Status:** milestone 2 — device discovery and option editing.
+**Status:** milestone 3 — device discovery, option editing and scanning.
 See [STRUCTURE.md](STRUCTURE.md) for the full plan.
 
 ## Dependencies (Fedora)
@@ -29,8 +29,13 @@ and the **Options** page is filled with the scanner's own options, read from
 (in `~/.config/scan-gui/config.json`).
 
 `scanimage -L` takes a few seconds to probe the backends, so the device list
-appears after a short delay. The **Scan** and **Results** pages are still
-placeholders.
+appears after a short delay.
+
+The **Scan** page starts a scan with the options from the **Options** page:
+the raw TIFF goes to `raw_dir` (`~/Scan/Raw` by default) as `000001.tiff`,
+`000002.tiff`, …, the progress bar is fed by `scanimage --progress`, and
+Cancel kills the scanner. A lock file keeps two scans from colliding, the
+same way the old `scan.sh` did. The **Results** page is still a placeholder.
 
 ## Tests
 
@@ -48,6 +53,6 @@ from sane-backends' virtual scanner) and one hand-written fixture
 
 - **M1** App skeleton, device discovery, device selection — *done*
 - **M2** Option form generated from the scanner's SANE options, presets — *done*
-- **M3** Async scanning with progress and cancel — *next*
-- **M4** Photo detection + cropping with result preview
+- **M3** Async scanning with progress and cancel — *done*
+- **M4** Photo detection + cropping with result preview — *next*
 - **M5** Desktop integration and RPM packaging

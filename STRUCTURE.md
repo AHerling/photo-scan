@@ -90,7 +90,7 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
 |---|---|---|
 | M1 | App skeleton, nav, real device discovery (`scanimage -L`), device selection, last-device memory | **done** |
 | M2 | Option descriptors (`scanimage -A` parsing), generated option form, Apply, saved presets | **done** |
-| M3 | Async scan job: progress bar, cancel, raw TIFF output, sequential numbering | next |
+| M3 | Async scan job: progress bar, cancel, raw TIFF output, sequential numbering | **done** |
 | M4 | Photo detection + crop (port of scan.sh python), result preview grid | |
 | M5 | `.desktop` file, icons, RPM spec, polish | |
 
@@ -135,6 +135,6 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
 | `scanimage -L` existence check | `backend/devices.py` — became real discovery |
 | Hardcoded `SCANNER='pixma:...'` | removed → `config.json` `last_device` |
 | Fixed `--resolution 1200` | editable option / saved preset (M2) |
-| TIFF output + `next_number()` | `backend/scan.py` + `config.py` output dirs (M3) |
-| `flock` lock file | single-instance via QApplication + ScanJob guard (M3) |
+| TIFF output + `next_number()` | `backend/scan.py` + `config.py` output dirs (M3 — done) |
+| `flock` lock file | `QLockFile` in `backend/scan.py` + ScanJob guard (M3 — done) |
 | Embedded OpenCV detection/crop python | `processing/photos.py` (M4) |
