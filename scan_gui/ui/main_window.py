@@ -107,8 +107,12 @@ class MainWindow(QMainWindow):
         self._options_page.preset_delete_requested.connect(self._on_preset_delete)
         self._options_page.set_presets(self._config.get("presets", {}))
 
+        self._scan_page.set_output_dir(self._raw_dir())
+        self._scan_page.set_output_path(next_output_path(Path(self._raw_dir())))
+
         self._scan_page.start_requested.connect(self._start_scan)
         self._scan_page.cancel_requested.connect(self._scan_job.cancel)
+        self._scan_page.output_dir_requested.connect(self._on_output_dir_chosen)
         self._scan_job.started.connect(self._on_scan_started)
         self._scan_job.progress.connect(self._scan_page.set_progress)
         self._scan_job.log.connect(self._scan_page.append_log)
@@ -188,16 +192,25 @@ class MainWindow(QMainWindow):
 
     # ---- scan handlers ----
 
+    def _raw_dir(self) -> str:
+        return self._config.get("raw_dir") or DEFAULTS["raw_dir"]
+
     def _start_scan(self) -> None:
         if self._device is None:
             self.statusBar().showMessage("Select a scanner first.")
             return
-        raw_dir = self._config.get("raw_dir") or DEFAULTS["raw_dir"]
-        output = next_output_path(Path(raw_dir))
+        output = next_output_path(Path(self._raw_dir()))
         values = self._options_page.current_values()
         self._scan_page.set_output_path(output)
         self._scan_page.clear_log()
         self._scan_job.start(self._device.name, self._options, values, output)
+
+    def _on_output_dir_chosen(self, path: str) -> None:
+        self._config["raw_dir"] = path
+        save_config(self._config)
+        self._scan_page.set_output_dir(path)
+        self._scan_page.set_output_path(next_output_path(Path(path)))
+        self.statusBar().showMessage(f"Raw scans will be saved to {path}")
 
     def _on_scan_started(self, path: str) -> None:
         self._scan_page.set_busy(True)

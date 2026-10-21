@@ -32,10 +32,11 @@ and the **Options** page is filled with the scanner's own options, read from
 appears after a short delay.
 
 The **Scan** page starts a scan with the options from the **Options** page:
-the raw TIFF goes to `raw_dir` (`~/Scan/Raw` by default) as `000001.tiff`,
-`000002.tiff`, …, the progress bar is fed by `scanimage --progress`, and
-Cancel kills the scanner. A lock file keeps two scans from colliding, the
-same way the old `scan.sh` did. The **Results** page is still a placeholder.
+the raw TIFF goes to the output folder (`/home/cain` by default — click the
+folder to change it) as `000001.tiff`, `000002.tiff`, …, the progress bar is
+fed by `scanimage --progress`, and Cancel kills the scanner. A lock file keeps
+two scans from colliding, the same way the old `scan.sh` did. The **Results**
+page is still a placeholder.
 
 ## Tests
 

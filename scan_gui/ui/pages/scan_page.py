@@ -6,6 +6,7 @@ live log of the scan.
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QFileDialog,
     QHBoxLayout,
     QLabel,
     QPlainTextEdit,
@@ -23,6 +24,7 @@ class ScanPage(QWidget):
 
     start_requested = Signal()
     cancel_requested = Signal()
+    output_dir_requested = Signal(str)  # chosen folder
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -35,6 +37,13 @@ class ScanPage(QWidget):
         self._output_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
+
+        self._folder_button = QPushButton()
+        self._folder_button.setToolTip("Folder for the raw scans — click to change")
+        self._folder_button.clicked.connect(self._choose_folder)
+        folder_row = QHBoxLayout()
+        folder_row.addWidget(QLabel("Output folder"))
+        folder_row.addWidget(self._folder_button, 1)
 
         self._progress = QProgressBar()
         self._progress.setRange(0, 100)
@@ -59,6 +68,7 @@ class ScanPage(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.addWidget(heading)
         layout.addWidget(self._device_label)
+        layout.addLayout(folder_row)
         layout.addWidget(self._output_label)
         layout.addWidget(self._progress)
         layout.addWidget(self._log, 1)
@@ -70,8 +80,18 @@ class ScanPage(QWidget):
         else:
             self._device_label.setText(f"{device.description}  ({device.name})")
 
+    def set_output_dir(self, path: str) -> None:
+        self._folder_button.setText(path)
+
     def set_output_path(self, path) -> None:
-        self._output_label.setText(f"Output: {path}")
+        self._output_label.setText(f"Next file: {path}")
+
+    def _choose_folder(self) -> None:
+        folder = QFileDialog.getExistingDirectory(
+            self, "Output folder", self._folder_button.text()
+        )
+        if folder:
+            self.output_dir_requested.emit(folder)
 
     def set_busy(self, busy: bool) -> None:
         self._start_button.setEnabled(not busy)
