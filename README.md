@@ -7,7 +7,34 @@ automatically detect and crop photographs from the scanned image — a GUI
 successor to `scan.sh`.
 
 **Status:** milestone 4 — device discovery, option editing, scanning and
-photo detection. See [STRUCTURE.md](STRUCTURE.md) for the full plan.
+photo detection, with a new **Simple mode** for everyday use.
+See [STRUCTURE.md](STRUCTURE.md) for the full plan.
+
+## The two modes
+
+The **Mode** drop-down in the header switches between them; the app opens in
+**Simple mode**.
+
+**Simple mode** is the everyday view — four drop-downs and a button:
+
+```
+Scanner      [ Canon PIXMA MP610 Scanner        ▾]
+Colour       [ Full colour                     ▾]
+Resolution   [ 1200 dpi                        ▾]
+Save to      [ /home/cain                      ]  (click to change)
+                    [ Start scan ]
+```
+
+The colour list runs from full colour down to black and white, the
+resolutions from the highest to the lowest, and only what your scanner
+actually offers is shown. While the app is still looking for scanners, or
+still reading their options, the controls stay greyed out and the line under
+the button says what is happening (*Looking for scanners…*, *Reading the
+scanner's options…*, *Ready to scan.*, *Scanning…*).
+
+**DEV-Mode** is the full view that came before it: a sidebar with the
+Scanner, Options, Scan and Results pages, every SANE option, presets, the
+scanner log and the lock file. Pick it in the Mode drop-down.
 
 ## Dependencies (Fedora)
 
@@ -66,4 +93,5 @@ covered without a scanner as well.
 - **M2** Option form generated from the scanner's SANE options, presets — *done*
 - **M3** Async scanning with progress and cancel — *done*
 - **M4** Photo detection + cropping with result preview — *done*
-- **M5** Desktop integration and RPM packaging — *next*
+- **Simple mode** — the everyday view, four drop-downs and a start button — *done*
+- **M5** Desktop integration and RPM packaging — *on hold, the UI comes first*

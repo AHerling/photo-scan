@@ -25,6 +25,7 @@ printer-gui/
 │   ├── app.py                      # QApplication, Fusion style, MainWindow
 │   ├── config.py                   # JSON settings in ~/.config/scan-gui/ (last device, dirs, presets)
 │   ├── models.py                   # dataclasses: Device, OptionDescriptor, OptionType, ScanProfile
+│   ├── simple_options.py           # the simple mode's drop-down contents (colour, resolution) — pure
 │   ├── state.py                    # AppState enum + AppStateMachine (signals on transitions)
 │   ├── backend/                    # ALL scanimage access — QtCore only, never QtWidgets
 │   │   ├── devices.py              # `scanimage -L` parsing + async DeviceScanner (QProcess)
@@ -34,8 +35,9 @@ printer-gui/
 │   │   ├── photos.py               # detect + crop photographs (ported from scan.sh's python block) — M4, done
 │   │   └── worker.py               # QRunnable wrapper so OpenCV never blocks the UI (M4 — done)
 │   └── ui/                         # imports backend + models; never builds scanimage commands itself
-│       ├── main_window.py          # QMainWindow: nav sidebar + QStackedWidget + status bar
+│       ├── main_window.py          # QMainWindow: header + mode switch, nav sidebar, stacked pages
 │       ├── pages/
+│       │   ├── simple_page.py      # the everyday view: scanner, colour, resolution, folder, start
 │       │   ├── device_page.py      # scanner list, refresh (M1 — done)
 │       │   ├── options_page.py     # generated option form, Apply, presets (M2 — done)
 │       │   ├── scan_page.py        # Start/Cancel, progress bar, log (M3)
@@ -50,7 +52,8 @@ printer-gui/
     ├── test_devices_parsing.py
     ├── test_options_parsing.py     # M2 — done
     ├── test_photos.py              # M4 — done
-    └── test_photo_worker.py        # M4 — done
+    ├── test_photo_worker.py        # M4 — done
+    └── test_simple_options.py      # simple mode drop-downs — done
 ```
 
 ## Layering rules
@@ -93,7 +96,32 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
 | M2 | Option descriptors (`scanimage -A` parsing), generated option form, Apply, saved presets | **done** |
 | M3 | Async scan job: progress bar, cancel, raw TIFF output, sequential numbering | **done** |
 | M4 | Photo detection + crop (port of scan.sh python), result preview grid | **done** |
-| M5 | `.desktop` file, icons, RPM spec, polish | |
+| M5 | `.desktop` file, icons, RPM spec, polish | *paused* |
+
+> **M5 is on hold.** The UI is not where the user wants it yet, so packaging
+> waits. The full view stays available as **DEV-Mode** while the everyday
+> view is reworked.
+
+## The two modes
+
+The window has a **Mode** drop-down in its header:
+
+| Mode | What it shows |
+|---|---|
+| **Simple mode** (default) | The everyday view: scanner, colour, resolution, output folder, *Start scan*. Everything is greyed out until the information it needs has arrived. |
+| **DEV-Mode** | The full view: sidebar with the Scanner, Options, Scan and Results pages — every SANE option, presets, the log, the lock file. |
+
+Both modes drive the same state machine and the same backend; the simple
+mode only adds a short list of choices on top (`simple_options.py`):
+
+* **Colour** — the scanner's scan mode, ordered full colour → greyscale →
+  black & white; scanners without a scan mode fall back to their bit depth.
+* **Resolution** — the well-known steps that fit inside the scanner's own
+  range, highest first (1200, 600, 300, 200, 150, 100, 75, 50 — only those
+  the scanner accepts).
+
+Changing a value in the simple mode updates the full form too, so switching
+modes never loses a setting.
 
 ### Spike items (resolved — answers recorded here)
 

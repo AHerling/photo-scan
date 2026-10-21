@@ -167,6 +167,13 @@ class OptionsPage(QWidget):
             values[descriptor.name] = widget.value()
         return values
 
+    def set_value(self, name: str, value: str) -> None:
+        """Set one option in the form, e.g. from the simple mode."""
+        for descriptor, widget in zip(self._descriptors, self._widgets):
+            if descriptor.name == name:
+                widget.set_value(str(value))
+                return
+
     def _apply(self) -> None:
         values = self.current_values()
         self._status.setText(f"Applied {len(values)} option(s).")

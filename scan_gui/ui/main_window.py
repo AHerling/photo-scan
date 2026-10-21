@@ -9,10 +9,13 @@ from pathlib import Path
 from PySide6.QtCore import QThreadPool, Qt, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
+    QLabel,
     QListWidget,
     QMainWindow,
     QStackedWidget,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -27,8 +30,13 @@ from scan_gui.ui.pages.device_page import DevicePage
 from scan_gui.ui.pages.options_page import OptionsPage
 from scan_gui.ui.pages.results_page import ResultsPage
 from scan_gui.ui.pages.scan_page import ScanPage
+from scan_gui.ui.pages.simple_page import SimplePage
 
 _NAV_ITEMS = ("Scanner", "Options", "Scan", "Results")
+
+# The two ways the app can look: the everyday view and the full one.
+_MODE_SIMPLE = 0
+_MODE_DEV = 1
 
 # Which pages are reachable in each state.
 _NAV_BY_STATE = {
@@ -56,10 +64,29 @@ class MainWindow(QMainWindow):
         self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(1)
         self._device: Device | None = None
+        self._devices: list[Device] = []
         self._options: list[OptionDescriptor] = []
         self._option_values: dict[str, str] = {}
 
-        # --- layout: nav sidebar + stacked pages ---
+        # --- layout: header + one of the two modes ---
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItem("Simple mode", _MODE_SIMPLE)
+        self._mode_combo.addItem("DEV-Mode", _MODE_DEV)
+        self._mode_combo.setToolTip("Simple mode is the everyday view")
+        self._mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+
+        title = QLabel("Scan GUI")
+        title.setObjectName("appTitle")
+
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(16, 8, 16, 8)
+        header_layout.addWidget(title)
+        header_layout.addStretch(1)
+        header_layout.addWidget(QLabel("Mode"))
+        header_layout.addWidget(self._mode_combo)
+
+        # --- nav sidebar + stacked pages (the DEV mode) ---
         self._nav = QListWidget()
         self._nav.setObjectName("navList")
         self._nav.setFixedWidth(150)
@@ -81,12 +108,27 @@ class MainWindow(QMainWindow):
             self._pages.addWidget(page)
         self._nav.currentRowChanged.connect(self._pages.setCurrentIndex)
 
+        dev_area = QWidget()
+        dev_layout = QHBoxLayout(dev_area)
+        dev_layout.setContentsMargins(0, 0, 0, 0)
+        dev_layout.setSpacing(0)
+        dev_layout.addWidget(self._nav)
+        dev_layout.addWidget(self._pages, 1)
+
+        # --- the simple mode ---
+        self._simple_page = SimplePage()
+
+        self._modes = QStackedWidget()
+        self._modes.addWidget(self._simple_page)
+        self._modes.addWidget(dev_area)
+        self._modes.setCurrentIndex(_MODE_SIMPLE)
+
         central = QWidget()
-        layout = QHBoxLayout(central)
+        layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(self._nav)
-        layout.addWidget(self._pages, 1)
+        layout.addWidget(header)
+        layout.addWidget(self._modes, 1)
         self.setCentralWidget(central)
 
         self.statusBar().showMessage("No scanner selected.")
@@ -118,10 +160,17 @@ class MainWindow(QMainWindow):
         self._scan_page.output_dir_requested.connect(self._on_output_dir_chosen)
         self._scan_job.started.connect(self._on_scan_started)
         self._scan_job.progress.connect(self._scan_page.set_progress)
+        self._scan_job.progress.connect(self._simple_page.set_progress)
         self._scan_job.log.connect(self._scan_page.append_log)
         self._scan_job.finished.connect(self._on_scan_finished)
         self._scan_job.failed.connect(self._on_scan_failed)
         self._scan_job.cancelled.connect(self._on_scan_cancelled)
+
+        self._simple_page.printer_selected.connect(self._on_simple_printer_selected)
+        self._simple_page.scan_requested.connect(self._start_scan)
+        self._simple_page.folder_requested.connect(self._on_output_dir_chosen)
+        self._simple_page.settings_changed.connect(self._on_simple_settings_changed)
+        self._simple_page.set_output_dir(self._raw_dir())
 
         # Kick off the initial device discovery once the event loop is running.
         QTimer.singleShot(0, self._device_page.refresh_requested)
@@ -129,8 +178,10 @@ class MainWindow(QMainWindow):
     # ---- device discovery handlers ----
 
     def _on_devices_found(self, devices: list) -> None:
+        self._devices = list(devices)
         self._device_page.set_busy(False)
         self._device_page.set_devices(devices)
+        self._simple_page.set_devices(self._devices)
         # Restore previous selection if that device is still present.
         self._device_page.select_device_named(self._config.get("last_device"))
         if not devices:
@@ -139,38 +190,54 @@ class MainWindow(QMainWindow):
     def _on_refresh_failed(self, message: str) -> None:
         self._device_page.set_busy(False)
         self._device_page.set_error(f"Device scan failed: {message}")
+        self._simple_page.set_status(f"Device scan failed: {message}")
         self.statusBar().showMessage(f"Device scan failed: {message}")
 
     def _on_device_selected(self, device: Device | None) -> None:
         self._device = device
         self._options_page.set_device(device)
         self._scan_page.set_device(device)
+        self._simple_page.set_selected_device(device.name if device else None)
         self._options = []
         self._option_values = {}
         if device is None:
             self._state.transition(AppState.NO_DEVICE)
             self.statusBar().showMessage("No scanner selected.")
+            self._simple_page.set_status("Choose a scanner to get started.")
         else:
             self._state.transition(AppState.DEVICE_SELECTED)
             self.statusBar().showMessage(f"Selected: {device.name}")
+            self._simple_page.set_status("Reading the scanner's options…")
             self._options_page.load_requested.emit(device.name)
         self._config["last_device"] = device.name if device else None
         save_config(self._config)
+
+    def _on_simple_printer_selected(self, name: str) -> None:
+        """The scanner was picked in the simple mode."""
+        if not name:
+            self._on_device_selected(None)
+            return
+        device = next((d for d in self._devices if d.name == name), None)
+        if device is not None and (self._device is None or self._device.name != name):
+            self._on_device_selected(device)
 
     # ---- option handlers ----
 
     def _on_options_loaded(self, options: list) -> None:
         self._options = list(options)
         self._options_page.set_options(options)
+        self._simple_page.set_options(options)
         self._state.transition(AppState.OPTIONS_LOADED)
         self.statusBar().showMessage(
             f"{self._device.name}: {len(options)} option(s) loaded."
             if self._device
             else "Options loaded."
         )
+        self._simple_page.set_status("Ready to scan.")
 
     def _on_options_failed(self, message: str) -> None:
         self._options_page.set_error(f"Could not read options: {message}")
+        self._simple_page.set_options_failed(f"Could not read options: {message}")
         self.statusBar().showMessage(f"Could not read options: {message}")
 
     def _on_options_applied(self, values: dict) -> None:
@@ -201,28 +268,41 @@ class MainWindow(QMainWindow):
     def _start_scan(self) -> None:
         if self._device is None:
             self.statusBar().showMessage("Select a scanner first.")
+            self._simple_page.set_status("Choose a scanner first.")
             return
         output = next_output_path(Path(self._raw_dir()))
         values = self._options_page.current_values()
+        # The simple mode has the last word on colour and resolution.
+        values.update(self._simple_page.current_values())
         self._scan_page.set_output_path(output)
         self._scan_page.clear_log()
         self._scan_job.start(self._device.name, self._options, values, output)
+
+    def _on_simple_settings_changed(self, values: dict) -> None:
+        """The simple mode changed a setting — keep the full form in step."""
+        for name, value in values.items():
+            self._options_page.set_value(name, value)
 
     def _on_output_dir_chosen(self, path: str) -> None:
         self._config["raw_dir"] = path
         save_config(self._config)
         self._scan_page.set_output_dir(path)
         self._scan_page.set_output_path(next_output_path(Path(path)))
+        self._simple_page.set_output_dir(path)
         self.statusBar().showMessage(f"Raw scans will be saved to {path}")
 
     def _on_scan_started(self, path: str) -> None:
         self._scan_page.set_busy(True)
+        self._simple_page.set_busy(True)
+        self._simple_page.set_status("Scanning…")
         self._state.transition(AppState.SCANNING)
         self.statusBar().showMessage(f"Scanning to {path}")
 
     def _on_scan_finished(self, path: str) -> None:
         self._scan_page.set_processing(True)
         self._scan_page.set_progress(100)
+        self._simple_page.set_progress(100)
+        self._simple_page.set_status("Looking for photographs…")
         self._state.transition(AppState.PROCESSING)
         self._start_processing(Path(path))
 
@@ -236,16 +316,23 @@ class MainWindow(QMainWindow):
 
     def _on_photos_found(self, paths: list) -> None:
         self._scan_page.set_processing(False)
+        self._simple_page.set_busy(False)
         source = self._scan_page.output_path()
         self._results_page.set_photos(paths, str(source) if source else "")
         self._state.transition(AppState.DONE)
         self._nav.setCurrentRow(3)
+        folder = str(Path(paths[0]).parent) if paths else self._raw_dir()
+        self._simple_page.set_status(
+            f"{len(paths)} photograph(s) saved in {folder}."
+        )
         self.statusBar().showMessage(f"{len(paths)} photograph(s) detected.")
 
     def _on_photos_failed(self, message: str) -> None:
         self._scan_page.set_processing(False)
+        self._simple_page.set_busy(False)
         self._results_page.set_error(message)
         self._state.transition(AppState.DONE)
+        self._simple_page.set_status(f"Photo detection: {message}")
         self.statusBar().showMessage(f"Photo detection: {message}")
 
     def _on_scan_failed(self, message: str) -> None:
@@ -254,13 +341,28 @@ class MainWindow(QMainWindow):
         busy = self._scan_job.busy
         self._scan_page.set_busy(busy)
         if not busy:
+            self._simple_page.set_busy(False)
             self._state.transition(AppState.OPTIONS_LOADED)
+        self._simple_page.set_status(f"Scan failed: {message}")
         self.statusBar().showMessage(f"Scan failed: {message}")
 
     def _on_scan_cancelled(self) -> None:
         self._scan_page.set_busy(False)
+        self._simple_page.set_busy(False)
         self._state.transition(AppState.OPTIONS_LOADED)
+        self._simple_page.set_status("Scan cancelled.")
         self.statusBar().showMessage("Scan cancelled.")
+
+    # ---- modes ----
+
+    def _on_mode_changed(self, index: int) -> None:
+        """Switch between the everyday view and the full one."""
+        self._modes.setCurrentIndex(index)
+        if index == _MODE_DEV:
+            self._nav.setCurrentRow(0)
+        self.statusBar().showMessage(
+            "Simple mode" if index == _MODE_SIMPLE else "DEV-Mode"
+        )
 
     # ---- state machine ----
 
