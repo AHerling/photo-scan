@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.AHerling.photo-scan</id>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>Photo Scan</name>
+  <summary>Scan documents and photos with SANE</summary>
+
+  <developer id="io.github.aherling">
+    <name>Photo Scan Contributors</name>
+  </developer>
+
+  <description>
+    <p>
+      Photo Scan is a desktop application for SANE scanners on Linux. It helps
+      you scan documents and photographs, and automatically detects and crops
+      the photos lying on the scanner bed.
+    </p>
+    <ul>
+      <li>Discover USB, network and AirScan/eSCL scanners</li>
+      <li>Simple mode for everyday scanning</li>
+      <li>Pro mode with the full set of SANE options, a bed preview and interactive area selection</li>
+      <li>Automatic photo detection, including several photos in one scan</li>
+      <li>Save to the folder you choose, with automatic file numbering</li>
+    </ul>
+    <p>
+      USB scanners need the scanner and lp groups, network scanners need the
+      Avahi daemon running. Photo Scan has no command line interface; it is
+      driven entirely through its windows.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.AHerling.photo-scan.desktop</launchable>
+
+  <url type="homepage">https://github.com/AHerling/photo-scan</url>
+  <url type="bugtracker">https://github.com/AHerling/photo-scan/issues</url>
+  <url type="contribute">https://github.com/AHerling/photo-scan/graphs/contributors</url>
+  <url type="vcs-browser">https://github.com/AHerling/photo-scan</url>
+
+  <content_rating type="oars-1.1" />
+
+  <categories>
+    <category>Graphics</category>
+    <category>Scanning</category>
+    <category>Photography</category>
+  </categories>
+
+  <keywords>
+    <keyword>scanner</keyword>
+    <keyword>scan</keyword>
+    <keyword>photo</keyword>
+    <keyword>photos</keyword>
+    <keyword>sane</keyword>
+    <keyword>airscan</keyword>
+    <keyword>escl</keyword>
+    <keyword>flatbed</keyword>
+  </keywords>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </recommends>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#2a3352</color>
+    <color type="primary" scheme_preference="dark">#4a5a80</color>
+  </branding>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Simple mode: choose a scanner, colour, resolution and folder, then start the scan</caption>
+      <image type="source">https://raw.githubusercontent.com/AHerling/photo-scan/8d5ea860bf69a23b897777eba8ae3a1f7b711c2c/data/screenshots/simple-mode.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Pro mode: every SANE option, with a live preview of the scanner bed</caption>
+      <image type="source">https://raw.githubusercontent.com/AHerling/photo-scan/8d5ea860bf69a23b897777eba8ae3a1f7b711c2c/data/screenshots/pro-mode.png</image>
+    </screenshot>
+  </screenshots>
+
+  <releases>
+    <release version="0.2.0" date="2026-10-21">
+      <description>
+        <p>First public release.</p>
+        <ul>
+          <li>Renamed the application to io.github.AHerling.photo-scan</li>
+          <li>New original application icon</li>
+          <li>Removed the command line entry points; Photo Scan is a desktop application only</li>
+          <li>Rewritten packaging metadata: AppStream, desktop entry and RPM spec</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-10-21">
+      <description>
+        <p>Initial pre-release.</p>
+      </description>
+    </release>
+  </releases>
+
+  <update_contact>https://github.com/AHerling/photo-scan/issues</update_contact>
+</component>
