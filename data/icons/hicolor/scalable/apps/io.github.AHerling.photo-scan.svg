@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Photo Scan">
+  <title>Photo Scan</title>
+  <defs>
+    <linearGradient id="ps-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a5a80"/>
+      <stop offset="1" stop-color="#2a3352"/>
+    </linearGradient>
+    <linearGradient id="ps-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffdda1"/>
+      <stop offset="1" stop-color="#ff9f5a"/>
+    </linearGradient>
+    <clipPath id="ps-photo-clip">
+      <rect x="74" y="40" width="108" height="108"/>
+    </clipPath>
+  </defs>
+
+  <!-- printed photo -->
+  <rect x="58" y="24" width="140" height="140" rx="12" fill="#fbfaf7"/>
+  <g clip-path="url(#ps-photo-clip)">
+    <rect x="74" y="40" width="108" height="108" fill="url(#ps-sky)"/>
+    <circle cx="141" cy="76" r="17" fill="#f2703c"/>
+    <path d="M74 148 L106 104 L128 130 L148 112 L182 148 Z" fill="#7ec8b8"/>
+    <path d="M74 148 L100 118 L122 148 L146 120 L182 148 Z" fill="#2f8f83"/>
+    <rect x="74" y="101" width="108" height="7" fill="#06b6d4"/>
+  </g>
+  <rect x="58" y="24" width="140" height="140" rx="12" fill="none" stroke="#2a3352" stroke-width="9"/>
+
+  <!-- scanner body -->
+  <rect x="16" y="150" width="224" height="82" rx="22" fill="url(#ps-body)"/>
+  <rect x="54" y="150" width="148" height="13" rx="6.5" fill="#171d2e"/>
+  <rect x="34" y="176" width="64" height="9" rx="4.5" fill="#ffffff" opacity="0.13"/>
+  <circle cx="206" cy="196" r="16" fill="#4ade80" opacity="0.18"/>
+  <circle cx="206" cy="196" r="9" fill="#4ade80"/>
+</svg>
