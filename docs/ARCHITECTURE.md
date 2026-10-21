@@ -1,59 +1,72 @@
-# scan-gui — Structure & Plan
+# Photo Scan — Architecture
 
-Qt6 (PySide6) desktop GUI for SANE scanners on Fedora: discover devices, edit
-scanner options, run scans, and automatically detect + crop photographs from
-the scanned image (the pipeline that started life in `scan.sh`).
+Photo Scan is a Qt 6 (PySide6) desktop application for SANE scanners on
+Linux: it discovers devices, edits scanner options, runs scans, and
+automatically detects and crops photographs from the scanned image.
 
-## Decisions (locked in)
+## Decisions
 
 | Decision | Choice | Why |
 |---|---|---|
-| GUI toolkit | **Qt6 / PySide6** (system RPM `python3-pyside6`) | Already installed on target machine, mature widgets, good async primitives |
-| SANE access | **`scanimage` subprocess** via `QProcess` | No new dependencies, process isolation, trivial cancellation (`kill()`), matches existing `scan.sh` |
-| Dependencies | **System Python + RPMs** (`python3-pyside6`, `python3-opencv`, `sane-backends`) | Everything already present on Fedora; no venv needed |
-| Scope | All 5 milestones, photo detection/crop included | Full replacement for `scan.sh` |
+| GUI toolkit | **Qt 6 / PySide6** (system RPM `python3-pyside6`) | Already installed on the target machine, mature widgets, good async primitives |
+| SANE access | **`scanimage` subprocess** via `QProcess` | No new dependencies, process isolation, trivial cancellation (`kill()`) |
+| Dependencies | **System Python + RPMs** (`python3-pyside6`, `python3-opencv`, `python3-numpy`, `sane-backends`, `sane-airscan`, `avahi`) | Everything is already present on the distributions we target; no virtual environment needed |
+| Scope | Simple mode for everyday use, Pro mode for full control | One application, two depths of control |
 
-## Directory layout (target)
+## Directory layout
 
 ```
-printer-gui/
-├── pyproject.toml                  # metadata; deps are RPMs, not pip
-├── README.md
-├── STRUCTURE.md                    # this file
+photo-scan/
+├── pyproject.toml                  # metadata; the dependencies are RPMs, not pip
+├── README.md                       # user documentation
+├── CHANGELOG.md
+├── photo-scan.spec                 # Fedora RPM spec
+├── FLATHUB_PACKAGING.md            # how the Flatpak submission works
+├── docs/
+│   └── ARCHITECTURE.md             # this file
+├── packaging/
+│   └── FLATPAK_MANIFEST_GUIDE.md   # worksheet for the hand-written manifest
+├── data/                           # desktop integration files
+│   ├── io.github.AHerling.photo-scan.desktop
+│   ├── io.github.AHerling.photo-scan.metainfo.xml
+│   ├── icons/hicolor/*/apps/io.github.AHerling.photo-scan.{svg,png}
+│   └── screenshots/{simple-mode,pro-mode}.png
 ├── scan_gui/
 │   ├── __main__.py                 # entry: python3 -m scan_gui
 │   ├── app.py                      # QApplication, Fusion style, MainWindow
-│   ├── config.py                   # JSON settings in ~/.config/scan-gui/ (last device, dirs, presets)
+│   ├── config.py                   # JSON settings in ~/.config/scan-gui/
 │   ├── models.py                   # dataclasses: Device, OptionDescriptor, OptionType, ScanProfile
 │   ├── simple_options.py           # the simple mode's drop-down contents (colour, resolution) — pure
 │   ├── state.py                    # AppState enum + AppStateMachine (signals on transitions)
 │   ├── backend/                    # ALL scanimage access — QtCore only, never QtWidgets
 │   │   ├── devices.py              # `scanimage -L` parsing + async DeviceScanner (QProcess)
-│   │   ├── options.py              # `scanimage -A` parsing → OptionDescriptors; builds option args (M2 — done)
-│   │   └── scan.py                 # ScanJob: QProcess wrapper, progress parsing, cancel (M3)
+│   │   ├── options.py              # `scanimage -A` parsing → OptionDescriptors; builds the option args
+│   │   ├── area.py                 # scan area handling
+│   │   └── scan.py                 # ScanJob: QProcess wrapper, progress parsing, cancel
 │   ├── processing/
-│   │   ├── photos.py               # detect + crop photographs (ported from scan.sh's python block) — M4, done
-│   │   └── worker.py               # QRunnable wrapper so OpenCV never blocks the UI (M4 — done)
+│   │   ├── photos.py               # detect + crop photographs
+│   │   └── worker.py               # QRunnable wrapper so OpenCV never blocks the UI
 │   └── ui/                         # imports backend + models; never builds scanimage commands itself
 │       ├── main_window.py          # QMainWindow: header + mode switch, nav sidebar, stacked pages
 │       ├── pages/
 │       │   ├── simple_page.py      # the everyday view: scanner, colour, resolution, folder, start
-│       │   ├── device_page.py      # scanner list, refresh (M1 — done)
-│       │   ├── options_page.py     # generated option form, Apply, presets (M2 — done)
-│       │   ├── scan_page.py        # Start/Cancel, progress bar, log (M3)
-│       │   └── results_page.py     # preview grid of cropped photos (M4 — done)
+│       │   ├── device_page.py      # scanner list, refresh
+│       │   ├── options_page.py     # generated option form, Apply, presets
+│       │   ├── scan_page.py        # Start/Cancel, progress bar, log
+│       │   └── results_page.py     # preview grid of cropped photos
 │       └── widgets/
-│           └── option_widgets.py   # factory: OptionDescriptor → Qt widget (M2 — done)
-├── data/                           # .desktop file, icons (M5)
-├── packaging/
-│   └── scan-gui.spec               # RPM spec (M5)
+│           ├── option_widgets.py   # factory: OptionDescriptor → Qt widget
+│           └── selection_view.py   # the area selection view
 └── tests/
     ├── fixtures/                   # captured scanimage output (no hardware needed)
     ├── test_devices_parsing.py
-    ├── test_options_parsing.py     # M2 — done
-    ├── test_photos.py              # M4 — done
-    ├── test_photo_worker.py        # M4 — done
-    └── test_simple_options.py      # simple mode drop-downs — done
+    ├── test_options_parsing.py
+    ├── test_photos.py
+    ├── test_photo_worker.py
+    ├── test_simple_options.py
+    ├── test_scan.py
+    ├── test_area.py
+    └── test_*.py
 ```
 
 ## Layering rules
@@ -77,7 +90,6 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
 - UI pieces react to `AppStateMachine.changed` signals instead of reaching
   into each other.
 - Page navigation and button enable/disable are driven from the state.
-- M1 implements the first transition only; later milestones extend it.
 
 ## Concurrency model
 
@@ -88,20 +100,6 @@ NO_DEVICE → DEVICE_SELECTED → OPTIONS_LOADED → SCANNING → PROCESSING →
   (`processing/worker.py`), reporting back over Qt signals.
 - The GUI thread never blocks. Scanning at 1200 DPI takes minutes.
 
-## Milestones
-
-| # | Deliverable | Status |
-|---|---|---|
-| M1 | App skeleton, nav, real device discovery (`scanimage -L`), device selection, last-device memory | **done** |
-| M2 | Option descriptors (`scanimage -A` parsing), generated option form, Apply, saved presets | **done** |
-| M3 | Async scan job: progress bar, cancel, raw TIFF output, sequential numbering | **done** |
-| M4 | Photo detection + crop (port of scan.sh python), result preview grid | **done** |
-| M5 | `.desktop` file, icons, RPM spec, polish | *paused* |
-
-> **M5 is on hold.** The UI is not where the user wants it yet, so packaging
-> waits. The full view stays available as **DEV-Mode** while the everyday
-> view is reworked.
-
 ## The two modes
 
 The window has a **Mode** drop-down in its header:
@@ -109,7 +107,7 @@ The window has a **Mode** drop-down in its header:
 | Mode | What it shows |
 |---|---|
 | **Simple mode** (default) | The everyday view: scanner, colour, resolution, output folder, *Start scan*. Everything is greyed out until the information it needs has arrived. |
-| **DEV-Mode** | The full view: sidebar with the Scanner, Options, Scan and Results pages — every SANE option, presets, the log, the lock file. |
+| **Pro Mode** | The full view: sidebar with the Scanner, Options, Scan and Results pages — every SANE option, presets, the log, the lock file. |
 
 Both modes drive the same state machine and the same backend; the simple
 mode only adds a short list of choices on top (`simple_options.py`):
@@ -123,7 +121,7 @@ mode only adds a short list of choices on top (`simple_options.py`):
 Changing a value in the simple mode updates the full form too, so switching
 modes never loses a setting.
 
-### Spike items (resolved — answers recorded here)
+## Notes on the SANE interface
 
 1. **Option descriptors.** `scanimage --get-options` does not exist in
    sane-backends 1.4.0; the flag is **`-A` / `--all-options`**
@@ -152,20 +150,20 @@ modes never loses a setting.
    well as `\n`.
 
 3. **Testing without hardware.** sane-backends' virtual scanner
-   (`virtual:virtual_scanner`) is present on the test machine and produces
-   real TIFFs, so M3/M4 can be developed end to end. Note that `scanimage -L`
-   takes ~4 s there while `scanimage -A` is instantaneous.
+   (`virtual:virtual_scanner`) produces real TIFFs, so scanning and photo
+   detection can be developed end to end. Note that `scanimage -L` takes a
+   few seconds there while `scanimage -A` is instantaneous.
 
-4. **Photo detection.** The OpenCV block of `scan.sh` is ported as it was:
-   greyscale the page, invert everything darker than 215 (the "content"
-   threshold), close the mask with a 25×25 kernel and open it with 5×5, then
-   keep the external contours that are at least 1.5 % of the page, at least
-   45 % filled, not more than 3.5:1 elongated and at least 1 % away from the
-   page edge. The four biggest candidates win and are numbered in reading
-   order (top to bottom, left to right). The search runs on a copy scaled to
-   2400 px wide, but the crops are taken from the full-resolution scan with
-   a perspective transform, so the photos keep their original pixels.
-
+4. **Photo detection.** The OpenCV block of the original `scan.sh` is ported
+   as it was: greyscale the page, invert everything darker than 215 (the
+   "content" threshold), close the mask with a 25×25 kernel and open it with
+   5×5, then keep the external contours that are at least 1.5 % of the page,
+   at least 45 % filled, not more than 3.5:1 elongated and at least 1 % away
+   from the page edge. The four biggest candidates win and are numbered in
+   reading order (top to bottom, left to right). The search runs on a copy
+   scaled to 2400 px wide, but the crops are taken from the full-resolution
+   scan with a perspective transform, so the photos keep their original
+   pixels.
 
 ## Where scan.sh went
 
@@ -173,7 +171,7 @@ modes never loses a setting.
 |---|---|
 | `scanimage -L` existence check | `backend/devices.py` — became real discovery |
 | Hardcoded `SCANNER='pixma:...'` | removed → `config.json` `last_device` |
-| Fixed `--resolution 1200` | editable option / saved preset (M2) |
-| TIFF output + `next_number()` | `backend/scan.py` + `config.py` output dirs (M3 — done) |
-| `flock` lock file | `QLockFile` in `backend/scan.py` + ScanJob guard (M3 — done) |
-| Embedded OpenCV detection/crop python | `processing/photos.py` (M4 — done) |
+| Fixed `--resolution 1200` | editable option / saved preset |
+| TIFF output + `next_number()` | `backend/scan.py` + `config.py` output dirs |
+| `flock` lock file | `QLockFile` in `backend/scan.py` + ScanJob guard |
+| Embedded OpenCV detection/crop python | `processing/photos.py` |

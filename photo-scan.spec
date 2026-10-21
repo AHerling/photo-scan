@@ -7,12 +7,13 @@ Summary:        Desktop app for SANE scanners with photo detection and cropping
 
 License:        MIT
 URL:            %{forgeurl}
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{forgeurl}/archive/refs/tags/v%{version}/%{name}-%{version}.tar.gz
 
 BuildArch:      noarch
 BuildRequires:  python3-devel >= 3.12
+BuildRequires:  python3-pip
 BuildRequires:  python3-setuptools
-BuildRequires:  python3-wheel
+BuildRequires:  pyproject-rpm-macros
 BuildRequires:  python3-pyside6
 BuildRequires:  python3-opencv
 BuildRequires:  python3-numpy

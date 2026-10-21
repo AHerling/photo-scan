@@ -1,0 +1,89 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the oldest version the project supports. The version Fedora
+        # ships (3.14) is covered by the rpm job below.
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "PySide6>=6.6" "opencv-python-headless>=4.9" "numpy>=1.26"
+
+      - name: Install Photo Scan
+        run: python -m pip install .
+
+      - name: Run the unit tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -v
+
+  metadata:
+    name: Desktop integration files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y appstream desktop-file-utils
+
+      - name: Validate the desktop entry
+        run: desktop-file-validate data/io.github.AHerling.photo-scan.desktop
+
+      - name: Validate the AppStream metadata
+        run: appstreamcli validate --no-net data/io.github.AHerling.photo-scan.metainfo.xml
+
+  rpm:
+    name: Fedora package
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the build dependencies
+        run: |
+          dnf install -y rpm-build pyproject-rpm-macros python3-devel python3-pip \
+                         python3-setuptools python3-pyside6 python3-opencv python3-numpy \
+                         desktop-file-utils
+
+      - name: Pack the sources
+        run: |
+          version=$(sed -n 's/^Version:[[:space:]]*//p' photo-scan.spec)
+          mkdir -p ~/rpmbuild/SOURCES
+          tar --exclude=.git --exclude=__pycache__ --exclude='*.pyc' \
+              -czf "~/rpmbuild/SOURCES/photo-scan-${version}.tar.gz" \
+              --transform "s,^\./,photo-scan-${version}/," .
+
+      - name: Build the source and binary packages
+        run: rpmbuild -ba photo-scan.spec --define "_topdir ~/rpmbuild"
+
+      - name: List the contents of the binary package
+        run: rpm -qlp ~/rpmbuild/RPMS/noarch/photo-scan-*.rpm

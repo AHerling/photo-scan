@@ -1,28 +1,26 @@
-# scan-gui
+# Photo Scan
 
-Qt6 (PySide6) desktop GUI for SANE scanners on Fedora.
+A desktop application for SANE scanners on Linux. It finds your scanner,
+scans documents and photographs, and automatically detects and crops the
+photographs lying on the scanner bed.
 
-Discover scanner devices, edit their SANE options, run scans, and
-automatically detect and crop photographs from the scanned image — a GUI
-successor to `scan.sh`.
-
-**Status:** milestone 4 — device discovery, option editing, scanning and
-photo detection, with a new **Simple mode** for everyday use.
-See [STRUCTURE.md](STRUCTURE.md) for the full plan.
+![Photo Scan in simple mode](data/screenshots/simple-mode.png)
 
 ## The two modes
 
 The **Mode** drop-down in the header switches between them; the app opens in
 **Simple mode**.
 
-**Simple mode** is the everyday view — four drop-downs and a button:
+### Simple mode
+
+The everyday view — four drop-downs and a button:
 
 ```
 Scanner      [ Canon PIXMA MP610 Scanner        ▾]
 Colour       [ Full colour                     ▾]
 Resolution   [ 1200 dpi                        ▾]
-Save to      [ /home/cain                      ]  (click to change)
-                    [ Start scan ]
+Save to      [ /home/you                       ]  (click to change)
+                     [ Start scan ]
 ```
 
 The colour list runs from full colour down to black and white, the
@@ -32,84 +30,173 @@ still reading their options, the controls stay greyed out and the line under
 the button says what is happening (*Looking for scanners…*, *Reading the
 scanner's options…*, *Ready to scan.*, *Scanning…*).
 
-**DEV-Mode** is the full view that came before it: a sidebar with the
-Scanner, Options, Scan and Results pages, every SANE option, presets, the
-scanner log and the lock file. Pick it in the Mode drop-down.
+### Pro mode
 
-## Network/WiFi scanners (eSCL/AirScan)
+![Photo Scan in pro mode](data/screenshots/pro-mode.png)
 
-`sane-airscan` is now recommended for network scanners that advertise themselves via mDNS/Avahi or eSCL. After installing it, `scanimage -L` should discover them automatically. If discovery is slow or a scanner is missing, check that `avahi-daemon` is running and enabled (`sudo systemctl enable --now avahi-daemon`), ensure the scanner and computer are on the same network, add your user to the `scanner,lp` groups, and check firewall settings. USB and `net`/`saned` scanners remain supported as before.
+The full view: a sidebar with the Scanner, Options, Scan and Results pages,
+every SANE option the device exposes, presets, the scanner log and the lock
+file. Pick *Pro Mode* in the Mode drop-down.
 
-## Dependencies (Fedora)
+Both modes drive the same state machine and the same backend. Changing a
+value in the simple mode updates the full form too, so switching modes never
+loses a setting.
 
-All via system packages — no venv or pip needed:
+## Installing
 
-```bash
-sudo dnf install python3-pyside6 python3-opencv sane-backends sane-airscan avahi
-```
+### Flatpak
 
-- `sane-backends` provides `scanimage` and core SANE drivers (USB scanners).
-- `sane-airscan` adds support for network/WiFi scanners using eSCL/AirScan (common on modern HP/Epson/Canon/Brother network printers/scanners). If you only use USB scanners, it is optional but recommended for broader compatibility.
-- `avahi` enables mDNS/zeroconf discovery for network scanners. Start it with `sudo systemctl enable --now avahi-daemon` if it's not already running.
-
-### Permissions (USB scanners)
-
-On Fedora, many USB scanners require membership in the `scanner` and `lp` groups:
+Once the application is published to Flathub it will be available through
+Flathub and every client built on it, including Bazaar:
 
 ```bash
-sudo usermod -aG scanner,lp $USER
+flatpak install flathub io.github.AHerling.photo-scan
 ```
 
-Log out and back in for the group changes to take effect. Without the correct permissions, `scanimage` may fail to access USB scanners.
+### RPM (Fedora)
 
-## Run
+The package is built from the spec in this repository. From a checkout:
+
+```bash
+sudo dnf install ./photo-scan-0.2.0-1.fc44.noarch.rpm
+```
+
+It is also published as a COPR repository, which installs the same package
+together with its dependencies:
+
+```bash
+sudo dnf install dnf-plugins-core
+sudo dnf copr enable @<your-account>/photo-scan
+sudo dnf install photo-scan
+```
+
+### From source
+
+Photo Scan needs Python 3.12 or newer and the system packages listed below.
+The dependencies are system packages on purpose: there is nothing to install
+into a virtual environment.
+
+On Fedora:
+
+```bash
+sudo dnf install python3-pyside6 python3-opencv python3-numpy \
+                 sane-backends sane-airscan avahi
+```
+
+Then, from a checkout:
 
 ```bash
 python3 -m scan_gui
 ```
 
+or install it into the current environment:
+
+```bash
+pip install .
+photo-scan
+```
+
+### What the scanner needs
+
+| Package | What it provides |
+|---|---|
+| `sane-backends` | `scanimage` and the USB scanner drivers |
+| `sane-airscan` | eSCL/AirScan support for network and Wi-Fi scanners |
+| `avahi` | mDNS discovery, so network scanners can be found |
+| `python3-pyside6` | the Qt 6 bindings |
+| `python3-opencv` | the photo detection and cropping |
+| `python3-numpy` | the array handling OpenCV works on |
+
+## Permissions
+
+### USB scanners
+
+Most USB scanners need membership in the `scanner` and `lp` groups:
+
+```bash
+sudo usermod -aG scanner,lp "$USER"
+```
+
+Log out and back in for the group change to take effect. Without it,
+`scanimage` cannot open the device.
+
+### Network scanners
+
+Network scanners advertise themselves over mDNS. AirScan is the recommended
+backend for them; after installing `sane-airscan`, `scanimage -L` discovers
+them on its own.
+
+If discovery is slow or a scanner is missing:
+
+* check that the Avahi daemon is running: `systemctl enable --now avahi-daemon`;
+* make sure the scanner and the computer are on the same network;
+* check the firewall.
+
+USB scanners and the older `net` and `saned` backends work as they always
+did.
+
+## Using it
+
 The **Scanner** page lists the devices reported by `scanimage -L`; pick one
 and the **Options** page is filled with the scanner's own options, read from
-`scanimage -A`. Options can be changed, applied, and stored as named presets
-(in `~/.config/scan-gui/config.json`).
+`scanimage -A`. Options can be changed, applied, and stored as named presets.
 
 `scanimage -L` takes a few seconds to probe the backends, so the device list
 appears after a short delay.
 
 The **Scan** page starts a scan with the options from the **Options** page:
-the raw TIFF goes to the output folder (`/home/cain` by default — click the
-folder to change it) as `000001.tiff`, `000002.tiff`, …, the progress bar is
-fed by `scanimage --progress`, and Cancel kills the scanner. A lock file keeps
-two scans from colliding, the same way the old `scan.sh` did.
+the raw TIFF goes to the output folder as `000001.tiff`, `000002.tiff`, …, the
+progress bar is fed by `scanimage --progress`, and Cancel kills the scanner.
+A lock file keeps two scans from colliding.
 
 When the scan finishes, the **Results** page looks for photographs in the
-scanned image and cuts them out — the detection and cropping ported from
-`scan.sh`'s embedded Python block. The photos are written to the photo folder
+scanned image and cuts them out. The photos are written to the photo folder
 as `000001.jpg`, `000002.jpg`, … and previewed in a thumbnail grid; the app
-switches to that page on its own. Detection runs in a background thread, so the
-window stays responsive, and a page without photographs simply says so.
+switches to that page on its own. Detection runs in a background thread, so
+the window stays responsive, and a page without photographs simply says so.
 
-## Tests
+Settings are stored as JSON in `~/.config/scan-gui/config.json`: the last
+device, the output folders and the saved presets.
+
+Photo Scan is a desktop application and has no command line interface.
+
+## Development
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-Tests run against captured `scanimage` output fixtures — no scanner required.
+The tests run against captured `scanimage` output fixtures, so no scanner is
+needed. The `tests/fixtures` folder holds one real capture
+(`scanimage_A_virtual.txt`, from sane-backends' virtual scanner) and one
+hand-written fixture (`scanimage_A_pixma.txt`) that mimics the layout of a
+Canon PIXMA. The photo tests build synthetic pages (a white sheet with dark
+rectangles) and run them through the real OpenCV pipeline, so detection and
+cropping are covered without hardware as well.
 
-The tests/fixtures folder holds one real capture (`scanimage_A_virtual.txt`,
-from sane-backends' virtual scanner) and one hand-written fixture
-(`scanimage_A_pixma.txt`) that mimics the layout of a Canon PIXMA.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the code is put
+together, and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
-The photo tests build synthetic pages (a white sheet with dark rectangles) and
-run them through the real OpenCV pipeline, so detection and cropping are
-covered without a scanner as well.
+## Packaging
 
-## Roadmap
+| Format | Where |
+|---|---|
+| Flatpak | [`packaging/FLATPAK_MANIFEST_GUIDE.md`](packaging/FLATPAK_MANIFEST_GUIDE.md) — the manifest is written by hand, see [`FLATHUB_PACKAGING.md`](FLATHUB_PACKAGING.md) |
+| RPM | [`photo-scan.spec`](photo-scan.spec) |
 
-- **M1** App skeleton, device discovery, device selection — *done*
-- **M2** Option form generated from the scanner's SANE options, presets — *done*
-- **M3** Async scanning with progress and cancel — *done*
-- **M4** Photo detection + cropping with result preview — *done*
-- **Simple mode** — the everyday view, four drop-downs and a start button — *done*
-- **M5** Desktop integration and RPM packaging — *on hold, the UI comes first*
+Desktop integration files live in `data/`: the desktop entry, the AppStream
+metainfo, the icon and the store screenshots. They are all named after the
+application ID, `io.github.AHerling.photo-scan`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+The AppStream metadata is licensed under CC0-1.0, as AppStream requires.
+
+## A note on AI assistance
+
+Parts of this repository, including the packaging metadata and the
+documentation, were written with the help of an AI assistant. The changes
+were reviewed and are the responsibility of the maintainer. Commits made
+with that help carry an `Assisted-by:` trailer.
