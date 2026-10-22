@@ -5,7 +5,7 @@ descriptors (via backend/options.py + ui/widgets/option_widgets.py), with
 Apply and preset actions. The page is dumb: it emits signals and shows data.
 """
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
@@ -66,6 +66,8 @@ class OptionsPage(QWidget):
 
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._scroll.setWidget(form_widget)
 
         self._advanced_box = QGroupBox("Advanced options")
@@ -120,8 +122,9 @@ class OptionsPage(QWidget):
         self._descriptors = list(options)
         for descriptor in options:
             widget = create_option_widget(descriptor)
-            if descriptor.current is not None:
-                widget.set_value(descriptor.current)
+            # Do not pre-fill with the scanner's current/default values.
+            # Leave options unset unless the user explicitly changes them.
+            widget.set_value("")
             widget.setEnabled(not descriptor.read_only and not descriptor.inactive)
             label = QLabel(descriptor.name)
             unit = f" ({descriptor.unit})" if descriptor.unit != "NONE" else ""
@@ -134,7 +137,7 @@ class OptionsPage(QWidget):
                 self._advanced_form.addRow(label, widget)
             else:
                 self._form.addRow(label, widget)
-        self._status.setText(f"{len(options)} option(s) loaded.")
+        self._status.setText(f"{len(options)} option(s) loaded. All unset — scanner defaults used.")
         self.set_busy(False)
 
     def set_error(self, message: str) -> None:
@@ -180,11 +183,10 @@ class OptionsPage(QWidget):
         self.options_applied.emit(values)
 
     def _revert(self) -> None:
-        """Restore the form to the values the scanner reported."""
+        """Clear all options so the scanner uses its own defaults."""
         for descriptor, widget in zip(self._descriptors, self._widgets):
-            if descriptor.current is not None:
-                widget.set_value(descriptor.current)
-        self._status.setText("Reverted to the scanner's current values.")
+            widget.set_value("")
+        self._status.setText("Cleared options; scanner defaults will be used.")
 
     def _on_preset_selected(self, name: str) -> None:
         values = self._presets.get(name)

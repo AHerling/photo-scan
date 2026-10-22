@@ -287,12 +287,48 @@ class MainWindow(QMainWindow):
             self._simple_page.set_status("Choose a scanner first.")
             return
         output = next_output_path(Path(self._raw_dir()))
-        values = self._options_page.current_values()
-        # The simple mode has the last word on colour and resolution.
-        values.update(self._simple_page.current_values())
-        selection = self._scan_page.selection()
-        if selection is not None:
-            values.update(self._selection_values(selection))
+        if self._modes.currentIndex() == _MODE_SIMPLE:
+            # Simple mode only passes colour and resolution; leave all other
+            # options at the scanner defaults to avoid backend-specific values
+            # like "auto" being rejected.
+            values = dict(self._simple_page.current_values())
+        else:
+            values = dict(self._options_page.current_values())
+            # In pro mode, only explicitly set options are passed.
+            # Ensure DPI/resolution and colour/depth use highest allowed if not set.
+            if "resolution" not in values or not values.get("resolution"):
+                res = find_option(self._options, "resolution")
+                if res is not None:
+                    from scan_gui.simple_options import option_values
+
+                    vals = option_values(res)
+                    if vals:
+                        ordered = sorted(vals, key=lambda x: int(x) if str(x).isdigit() else 0, reverse=True)
+                        values["resolution"] = str(ordered[0])
+            if "mode" not in values or not values.get("mode"):
+                mode = find_option(self._options, "mode")
+                if mode is not None:
+                    from scan_gui.simple_options import _MODE_LABELS, _normalise, option_values
+
+                    vals = option_values(mode)
+                    if vals:
+                        def _r(v):
+                            return _MODE_LABELS.get(_normalise(v), (v, 3))[1]
+                        vals_sorted = sorted(vals, key=_r)
+                        values["mode"] = str(vals_sorted[0])
+            if "bit-depth" not in values or not values.get("bit-depth"):
+                depth = find_option(self._options, "bit-depth")
+                if depth is not None:
+                    from scan_gui.simple_options import option_values
+
+                    vals = option_values(depth)
+                    if vals:
+                        ordered = sorted(vals, key=lambda x: int(x) if str(x).isdigit() else 0, reverse=True)
+                        if ordered:
+                            values["bit-depth"] = str(ordered[0])
+            selection = self._scan_page.selection()
+            if selection is not None:
+                values.update(self._selection_values(selection))
         self._scan_page.set_output_path(output)
         self._scan_page.clear_log()
         self._previewing = False
